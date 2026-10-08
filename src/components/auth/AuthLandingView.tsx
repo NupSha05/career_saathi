@@ -25,7 +25,7 @@ import {
 
 const PILLARS_LIST = [
   { id: 1, title: 'Student Intelligence Profile', desc: 'Central repository of verified identity, education, projects, skills, and evidence.', icon: GraduationCap },
-  { id: 2, title: 'Academic Intelligence', desc: 'Term-by-term SGPA/CGPA audit, credit tracking, and marksheet discrepancy detection.', icon: Award },
+  { id: 2, title: 'Academic Intelligence', desc: 'Consolidated degree tracking, semester-by-semester audit, credit tracking, and trajectory projection.', icon: Award },
   { id: 3, title: 'Career & Profile Intelligence', desc: 'Skill evidence tiers (Level 0-4), experience auditing, and project verification.', icon: Briefcase },
   { id: 4, title: 'JD / Opportunity Intelligence', desc: 'Deterministic 5-tier role-fit scoring against industry job descriptions.', icon: Layers },
   { id: 5, title: 'CV / Document Intelligence', desc: 'Action-verb audits, quantified metrics ratio, and triad gap reconciliation.', icon: FileText },
@@ -190,7 +190,7 @@ export const AuthLandingView: React.FC = () => {
           <Database className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
           <div>
             <h4 className="font-semibold text-white mb-1">User-Scoped Cloud Storage</h4>
-            <p>CVs, marksheets, and transcripts are stored in dedicated Supabase Storage buckets with user-path security.</p>
+            <p>CVs, resumes, and career portfolios are stored in dedicated Supabase Storage buckets with user-path security.</p>
           </div>
         </div>
 

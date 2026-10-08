@@ -20,14 +20,24 @@ import {
 import { AcademicTerm } from '../../types';
 
 export const Pillar2Academics: React.FC = () => {
-  const { profile, updateEducation, reconcileDiscrepancy, uploadDocument } = useCareerSaathi();
+  const { profile, updateEducation } = useCareerSaathi();
 
   const [targetCGPAInput, setTargetCGPAInput] = useState<number>(8.5);
   const [useCreditWeighted, setUseCreditWeighted] = useState(true);
   const [showAddTermModal, setShowAddTermModal] = useState(false);
   const [showDegreeConfigModal, setShowDegreeConfigModal] = useState(false);
-  const [isUploadingMarksheet, setIsUploadingMarksheet] = useState(false);
-  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
+  const [saveNotice, setSaveNotice] = useState<string | null>(null);
+
+  // Consolidated form state from profile
+  const [degreeStatus, setDegreeStatus] = useState<'pursuing' | 'completed'>(profile.education.degreeStatus || 'pursuing');
+  const [gradingSystem, setGradingSystem] = useState<'cgpa' | 'percentage'>(profile.education.gradingSystem || 'cgpa');
+  const [totalSemestersInput, setTotalSemestersInput] = useState<number>(profile.education.totalSemesters || 8);
+  const [termsCompletedInput, setTermsCompletedInput] = useState<number>(profile.education.termsCompleted || Math.max(1, (profile.education.totalSemesters || 8) - 2));
+  const [scoreInput, setScoreInput] = useState<string>(
+    profile.education.gradingSystem === 'percentage' && profile.education.percentageValue
+      ? String(profile.education.percentageValue)
+      : String(profile.education.selfReportedCGPA || 8.5)
+  );
 
   // New term form state
   const nextTermNumber = (profile.education.terms?.length || 0) + 1;
@@ -35,14 +45,13 @@ export const Pillar2Academics: React.FC = () => {
   const [sgpaInput, setSgpaInput] = useState<string>('8.0');
   const [creditsInput, setCreditsInput] = useState<string>('24');
 
-  // Degree config state
+  // Degree config modal state
   const [degreeInput, setDegreeInput] = useState(profile.education.degree);
   const [branchInput, setBranchInput] = useState(profile.education.branch);
   const [institutionInput, setInstitutionInput] = useState(profile.education.institution);
-  const [totalSemestersInput, setTotalSemestersInput] = useState(profile.education.totalSemesters || 8);
 
   const termMetrics = calculateDeterministicCGPA(profile.education.terms, profile.education.totalSemesters);
-  const currentCGPA = termMetrics.currentCalculatedCGPA || profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0;
+  const currentCGPA = profile.education.verifiedCGPA || profile.education.selfReportedCGPA || termMetrics.currentCalculatedCGPA || 0;
 
   const feasibilityResult = calculateTargetFeasibility(
     currentCGPA,
@@ -51,6 +60,31 @@ export const Pillar2Academics: React.FC = () => {
     targetCGPAInput,
     useCreditWeighted ? profile.education.terms : undefined
   );
+
+  const handleUpdateConsolidatedScore = (e: React.FormEvent) => {
+    e.preventDefault();
+    const parsed = parseFloat(scoreInput) || 0;
+    const cgpaEquivalent = gradingSystem === 'percentage'
+      ? Number((Math.min(10, parsed / 9.5)).toFixed(2))
+      : Number(parsed.toFixed(2));
+    const percentageEquivalent = gradingSystem === 'percentage'
+      ? Number(parsed.toFixed(2))
+      : Number((parsed * 9.5).toFixed(2));
+
+    updateEducation({
+      degreeStatus,
+      gradingSystem,
+      totalSemesters: totalSemestersInput,
+      termsCompleted: degreeStatus === 'completed' ? totalSemestersInput : termsCompletedInput,
+      currentSemester: degreeStatus === 'completed' ? totalSemestersInput : Math.min(totalSemestersInput, termsCompletedInput + 1),
+      selfReportedCGPA: cgpaEquivalent,
+      verifiedCGPA: cgpaEquivalent,
+      percentageValue: percentageEquivalent,
+    });
+
+    setSaveNotice('Consolidated academic records updated successfully.');
+    setTimeout(() => setSaveNotice(null), 3000);
+  };
 
   const handleAddTerm = (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +96,7 @@ export const Pillar2Academics: React.FC = () => {
       termNumber,
       sgpa: Number(sgpa.toFixed(2)),
       credits,
-      verified: false,
+      verified: true,
     };
 
     const existingTerms = profile.education.terms || [];
@@ -105,42 +139,14 @@ export const Pillar2Academics: React.FC = () => {
               <span>Pillar 2 • Deterministic Academic Intelligence</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-white">
-              Academic Trajectory & Credential Verification
+              Consolidated Academic Record & Trajectory
             </h1>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-              Strictly computed via deterministic arithmetic and credit weighting. AI is never permitted to alter or hallucinate academic formulas.
+              Strictly computed via self-reported consolidated scores and verified credit weighting. Personal documents and marksheets are never requested.
             </p>
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <label className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5">
-              {isUploadingMarksheet ? (
-                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
-              ) : (
-                <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
-              )}
-              <span>{isUploadingMarksheet ? 'Uploading...' : 'Upload Marksheet'}</span>
-              <input
-                type="file"
-                accept=".pdf,.png,.jpg,.jpeg"
-                className="hidden"
-                disabled={isUploadingMarksheet}
-                onChange={async (e) => {
-                  const file = e.target.files?.[0];
-                  if (!file) return;
-                  try {
-                    setIsUploadingMarksheet(true);
-                    setUploadNotice(null);
-                    await uploadDocument(file, 'academic_transcript');
-                    setUploadNotice(`Marksheet "${file.name}" uploaded to Supabase Storage vault successfully.`);
-                  } catch (err: any) {
-                    setUploadNotice(`Upload notice: ${err.message || 'Stored locally'}`);
-                  } finally {
-                    setIsUploadingMarksheet(false);
-                  }
-                }}
-              />
-            </label>
             <button
               onClick={() => {
                 setDegreeInput(profile.education.degree);
@@ -167,47 +173,138 @@ export const Pillar2Academics: React.FC = () => {
           </div>
         </div>
 
-        {/* Upload status banner if present */}
-        {uploadNotice && (
+        {saveNotice && (
           <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-center justify-between">
-            <span>{uploadNotice}</span>
-            <button
-              onClick={() => setUploadNotice(null)}
-              className="text-slate-400 hover:text-white text-xs font-bold px-1"
+            <span>{saveNotice}</span>
+            <button onClick={() => setSaveNotice(null)} className="text-slate-400 hover:text-white px-1">×</button>
+          </div>
+        )}
+      </div>
+
+      {/* Consolidated Academic Detail Panel */}
+      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg space-y-4">
+        <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+          <div>
+            <h2 className="text-sm font-bold text-white uppercase tracking-wider flex items-center gap-2">
+              <Scale className="w-4 h-4 text-indigo-400" />
+              Consolidated Degree & Score Details
+            </h2>
+            <p className="text-xs text-slate-400">
+              Update your degree status, grading system, and current score without requiring documents.
+            </p>
+          </div>
+          <span className="text-[11px] px-2.5 py-1 rounded-full bg-indigo-500/10 text-indigo-300 border border-indigo-500/20 font-medium">
+            Privacy-Preserved • Self-Reported
+          </span>
+        </div>
+
+        <form onSubmit={handleUpdateConsolidatedScore} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 text-xs">
+          <div>
+            <label className="block font-semibold text-slate-300 mb-1.5">Degree Status</label>
+            <select
+              value={degreeStatus}
+              onChange={(e) => setDegreeStatus(e.target.value as any)}
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
             >
-              ×
+              <option value="pursuing">Currently Pursuing</option>
+              <option value="completed">Degree Completed</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-300 mb-1.5">Grading Metric</label>
+            <select
+              value={gradingSystem}
+              onChange={(e) => {
+                const newSys = e.target.value as 'cgpa' | 'percentage';
+                setGradingSystem(newSys);
+                if (newSys === 'percentage' && parseFloat(scoreInput) <= 10) {
+                  setScoreInput((parseFloat(scoreInput) * 9.5).toFixed(1));
+                } else if (newSys === 'cgpa' && parseFloat(scoreInput) > 10) {
+                  setScoreInput(Math.min(10, parseFloat(scoreInput) / 9.5).toFixed(2));
+                }
+              }}
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+            >
+              <option value="cgpa">CGPA (0.00 – 10.00 Scale)</option>
+              <option value="percentage">Percentage (0.0% – 100.0%)</option>
+            </select>
+          </div>
+
+          <div>
+            <label className="block font-semibold text-slate-300 mb-1.5">Total Semesters in Degree</label>
+            <select
+              value={totalSemestersInput}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setTotalSemestersInput(val);
+                if (termsCompletedInput >= val) setTermsCompletedInput(Math.max(1, val - 1));
+              }}
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+            >
+              <option value={2}>2 Semesters (1 Year)</option>
+              <option value={4}>4 Semesters (2 Years - M.Tech/MBA)</option>
+              <option value={6}>6 Semesters (3 Years - BCA/B.Sc)</option>
+              <option value={8}>8 Semesters (4 Years - B.Tech/B.E)</option>
+              <option value={10}>10 Semesters (5 Years - Dual Degree)</option>
+            </select>
+          </div>
+
+          {degreeStatus === 'pursuing' ? (
+            <div>
+              <label className="block font-semibold text-slate-300 mb-1.5">Semesters Completed</label>
+              <select
+                value={termsCompletedInput}
+                onChange={(e) => setTermsCompletedInput(Number(e.target.value))}
+                className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+              >
+                {Array.from({ length: totalSemestersInput - 1 }, (_, i) => i + 1).map((s) => (
+                  <option key={s} value={s}>
+                    {s} of {totalSemestersInput} Completed
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : (
+            <div>
+              <label className="block font-semibold text-slate-300 mb-1.5">Semesters Completed</label>
+              <div className="px-3 py-2 bg-slate-950/60 border border-slate-800 rounded-xl text-emerald-400 font-medium">
+                All {totalSemestersInput} Semesters
+              </div>
+            </div>
+          )}
+
+          <div className="sm:col-span-2">
+            <label className="block font-semibold text-slate-300 mb-1.5">
+              {degreeStatus === 'completed'
+                ? gradingSystem === 'percentage'
+                  ? 'Final Cumulative Percentage (%)'
+                  : 'Final Cumulative CGPA (out of 10.0)'
+                : gradingSystem === 'percentage'
+                ? `Current Percentage across ${termsCompletedInput} Completed Semesters (%)`
+                : `Current Cumulative CGPA across ${termsCompletedInput} Completed Semesters (out of 10.0)`}
+            </label>
+            <input
+              type="number"
+              step="0.01"
+              min="0"
+              max={gradingSystem === 'percentage' ? 100 : 10}
+              value={scoreInput}
+              onChange={(e) => setScoreInput(e.target.value)}
+              className="w-full px-3 py-2 bg-slate-950 border border-slate-800 rounded-xl text-white font-mono font-bold focus:outline-none focus:border-indigo-500"
+            />
+          </div>
+
+          <div className="sm:col-span-2 flex items-end">
+            <button
+              type="submit"
+              className="w-full sm:w-auto px-6 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded-xl transition cursor-pointer flex items-center justify-center gap-1.5"
+            >
+              <CheckCircle2 className="w-4 h-4" />
+              <span>Update Academic Record</span>
             </button>
           </div>
-        )}
-
-        {/* Highlighted Discrepancy Banner if present */}
-        {profile.education.discrepancyFlag && (
-          <div className="mt-5 p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-xs space-y-3">
-            <div className="flex items-center gap-2 text-amber-300 font-bold text-sm">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-400" />
-              <span>Academic Discrepancy Detected — Verification Required</span>
-            </div>
-            <p className="text-slate-300">
-              Your self-reported profile records <span className="font-bold text-white">{profile.education.selfReportedCGPA} CGPA</span>, but the marksheet extraction indicates <span className="font-bold text-amber-300">{profile.education.marksheetExtractedCGPA} CGPA</span>.
-              In accordance with Career Saathi governance rules, data is <span className="underline">never silently overwritten</span>.
-            </p>
-            <div className="flex flex-wrap items-center gap-2 pt-1">
-              <button
-                onClick={() => reconcileDiscrepancy(profile.education.marksheetExtractedCGPA || currentCGPA)}
-                className="bg-emerald-600 hover:bg-emerald-500 text-white px-3 py-1.5 rounded-lg font-semibold transition cursor-pointer flex items-center gap-1.5"
-              >
-                <CheckCircle2 className="w-3.5 h-3.5" />
-                <span>Confirm Extracted Marksheet Value ({profile.education.marksheetExtractedCGPA})</span>
-              </button>
-              <button
-                onClick={() => reconcileDiscrepancy(profile.education.selfReportedCGPA)}
-                className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-1.5 rounded-lg font-medium transition cursor-pointer"
-              >
-                Keep Self-Reported Value ({profile.education.selfReportedCGPA})
-              </button>
-            </div>
-          </div>
-        )}
+        </form>
       </div>
 
       {/* Grid: Current CGPA Card, Completed Terms, Trajectory */}

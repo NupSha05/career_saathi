@@ -16,6 +16,7 @@ import {
   ensureStorageBucketExists,
   checkDatabaseSchemaStatus,
 } from './server/supabaseServer.js';
+import { AccountStore } from './server/accountStore.js';
 
 dotenv.config();
 
@@ -26,6 +27,106 @@ const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(express.json({ limit: '10mb' }));
+
+// 0. Authoritative Student Authentication & Profile Retrieval Endpoints
+app.post('/api/auth/signup', (req: Request, res: Response) => {
+  try {
+    const { email, password, fullName, college, branch, role } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const result = AccountStore.signUp({
+      email,
+      password,
+      fullName: fullName || '',
+      college,
+      branch,
+      role,
+    });
+    return res.json({
+      success: true,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        college: result.user.college,
+        branch: result.user.branch,
+        role: result.user.role,
+        createdAt: result.user.createdAt,
+      },
+      profile: result.profile,
+    });
+  } catch (err: any) {
+    console.error('Error in /api/auth/signup:', err);
+    return res.status(500).json({ error: err.message || 'Signup failed' });
+  }
+});
+
+app.post('/api/auth/signin', (req: Request, res: Response) => {
+  try {
+    const { email, password } = req.body;
+    if (!email || !password) {
+      return res.status(400).json({ error: 'Email and password are required' });
+    }
+    const result = AccountStore.signIn(email, password);
+    return res.json({
+      success: true,
+      user: {
+        id: result.user.id,
+        email: result.user.email,
+        name: result.user.name,
+        college: result.user.college,
+        branch: result.user.branch,
+        role: result.user.role,
+        createdAt: result.user.createdAt,
+        lastSignInAt: result.user.lastSignInAt,
+      },
+      profile: result.profile,
+    });
+  } catch (err: any) {
+    console.warn('Sign in notice:', err.message);
+    return res.status(401).json({ error: err.message || 'Authentication failed' });
+  }
+});
+
+app.get('/api/auth/profile/:userId', (req: Request, res: Response) => {
+  try {
+    const profile = AccountStore.getProfile(req.params.userId);
+    if (!profile) {
+      return res.status(404).json({ error: 'Profile not found' });
+    }
+    return res.json({ profile });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch profile' });
+  }
+});
+
+app.post('/api/auth/profile/:userId', (req: Request, res: Response) => {
+  try {
+    const saved = AccountStore.saveProfile(req.params.userId, req.body);
+    return res.json({ success: true, profile: saved });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to save profile' });
+  }
+});
+
+app.get('/api/auth/userdata/:userId/:key', (req: Request, res: Response) => {
+  try {
+    const data = AccountStore.getUserData(req.params.userId, req.params.key);
+    return res.json({ data: data || [] });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to fetch user data' });
+  }
+});
+
+app.post('/api/auth/userdata/:userId/:key', (req: Request, res: Response) => {
+  try {
+    AccountStore.saveUserData(req.params.userId, req.params.key, req.body);
+    return res.json({ success: true });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message || 'Failed to save user data' });
+  }
+});
 
 // 1. Ask Career Saathi (Conversational Agent with Selective RAG)
 app.post('/api/ai/ask', async (req: Request, res: Response) => {

@@ -46,9 +46,13 @@ export interface EducationRecord {
   branch: string;
   startYear: number;
   expectedGraduationYear: number;
+  degreeStatus?: 'pursuing' | 'completed';
+  gradingSystem?: 'cgpa' | 'percentage';
+  termsCompleted?: number;
   currentSemester: number;
   totalSemesters: number;
   selfReportedCGPA: number;
+  percentageValue?: number;
   verifiedCGPA?: number;
   marksheetExtractedCGPA?: number;
   discrepancyFlag?: boolean;
@@ -209,6 +213,17 @@ export interface LinkedInAnalysis {
   lastAnalyzed: string;
 }
 
+export interface ApplicationEvent {
+  id: string;
+  applicationId: string;
+  previousStage: ApplicationStage | null;
+  newStage: ApplicationStage;
+  eventType: string;
+  eventDate: string;
+  notes?: string;
+  created_at: string;
+}
+
 export interface ApplicationRecord {
   id: string;
   company: string;
@@ -216,9 +231,14 @@ export interface ApplicationRecord {
   appliedDate: string;
   stage: ApplicationStage;
   stageUpdatedDate: string;
-  healthCategory: 'Healthy' | 'Requires Attention' | 'At Risk' | 'Completed / Closed';
+  applicationType?: 'On-Campus' | 'Off-Campus';
+  opportunityId?: string;
+  source?: string;
+  sourceUrl?: string;
+  healthCategory: 'Healthy' | 'Requires Attention' | 'At Risk' | 'Completed / Closed' | 'No recorded update' | 'Stale';
   healthRationale: string;
   history: Array<{ stage: ApplicationStage; timestamp: string; comment?: string }>;
+  events?: ApplicationEvent[];
   salaryOffered?: string;
   location?: string;
   notes?: string;
@@ -242,6 +262,15 @@ export interface PracticeEvaluation {
   pinpointedWeaknesses: string[];
   idealAnswerStructure: string;
   followUpQuestion: string;
+  recommendedFocus?: string;
+}
+
+export interface PracticeQuestionContext {
+  category: string;
+  reason: string;
+  source: string;
+  difficulty: string;
+  framework?: string;
 }
 
 export interface PracticeSession {
@@ -249,9 +278,15 @@ export interface PracticeSession {
   category: 'Aptitude' | 'Technical' | 'Group Discussion (GD)' | 'Case Interview' | 'Personal Interview';
   mode: 'Practice' | 'Timed Practice' | 'Targeted Weakness Practice';
   frameworkApplied: string;
+  targetRole?: string;
+  opportunityId?: string;
+  applicationId?: string;
   question: string;
+  questionContext?: PracticeQuestionContext;
   studentAnswer: string;
   evaluation?: PracticeEvaluation;
+  status?: 'in_progress' | 'completed';
+  startedAt?: string;
   completedAt: string;
 }
 
@@ -259,12 +294,17 @@ export interface ReadinessDimensions {
   academicReadiness: number; // 0-100
   profileReadiness: number; // 0-100
   skillReadiness: number; // 0-100
-  opportunityReadiness: number; // 0-100
-  interviewReadiness: number; // 0-100
+  opportunityReadiness: number | null; // 0-100 or null if no opportunity analyzed
+  interviewReadiness: number | null; // 0-100 or null if no practice completed
+  opportunityReadinessNote?: string;
+  interviewReadinessNote?: string;
   overallScore: number; // 0-100
-  trend: 'improving' | 'stable' | 'declining';
+  trend: 'Improving' | 'Stable' | 'Declining' | 'Insufficient history';
   positiveContributors: string[];
   limitingFactors: string[];
+  missingInformation?: string[];
+  recommendedNextAction?: string;
+  methodologyVersion?: string;
   lastCalculated: string;
 }
 

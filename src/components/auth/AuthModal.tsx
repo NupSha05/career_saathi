@@ -52,13 +52,6 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setLocalError(null);
     setSuccessMsg(null);
 
-    if (!isConfigured) {
-      setLocalError(
-        'Supabase configuration is required to authenticate. Set VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY in your environment.'
-      );
-      return;
-    }
-
     if (!email) {
       setLocalError('Please enter your email address.');
       return;
@@ -89,7 +82,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         setSuccessMsg('Account created successfully! Session established.');
         setTimeout(() => {
           onClose();
-        }, 1200);
+        }, 800);
       } else if (mode === 'reset') {
         await resetPassword(email);
         setSuccessMsg(`Password reset link dispatched to ${email}. Please check your inbox.`);

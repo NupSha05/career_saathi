@@ -1,0 +1,54 @@
+{
+  "usr-1791434924997-rhigu": {
+    "id": "usr-1791434924997-rhigu",
+    "name": "Ananya Sen",
+    "email": "student.test@campus.edu",
+    "phone": "",
+    "college": "IIT Delhi",
+    "headline": "Computer Science & Engineering Student",
+    "about": "",
+    "careerStage": "Final Year Student",
+    "onboardingCompleted": true,
+    "linkedInUrl": "",
+    "githubUrl": "",
+    "portfolioUrl": "",
+    "education": {
+      "institution": "IIT Delhi",
+      "degree": "B.Tech",
+      "branch": "Computer Science & Engineering",
+      "degreeStatus": "pursuing",
+      "gradingSystem": "cgpa",
+      "totalSemesters": 8,
+      "termsCompleted": 6,
+      "selfReportedCGPA": 9.15,
+      "verifiedCGPA": 9.15
+    },
+    "preferences": {
+      "targetRoles": [
+        "Software Development Engineer",
+        "Full Stack Developer"
+      ],
+      "preferredLocations": [
+        "Bengaluru",
+        "Hyderabad",
+        "Remote"
+      ],
+      "minAcceptableCTC": "₹12,00,000",
+      "preferredWorkType": "Hybrid",
+      "willingToRelocate": true
+    },
+    "skills": [],
+    "projects": [],
+    "experiences": [],
+    "certifications": [],
+    "readinessScores": {
+      "academic": 85,
+      "profile": 80,
+      "skill": 78,
+      "opportunity": 82,
+      "interview": 75,
+      "overall": 80
+    },
+    "updated_at": "2026-10-08T04:48:45.011Z"
+  }
+}

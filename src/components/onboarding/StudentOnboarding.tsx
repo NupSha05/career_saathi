@@ -26,7 +26,15 @@ export const StudentOnboarding: React.FC = () => {
   const [degree, setDegree] = useState(profile.education.degree || 'B.Tech');
   const [branch, setBranch] = useState(profile.education.branch || 'Computer Science & Engineering');
   const [gradYear, setGradYear] = useState(profile.education.expectedGraduationYear || 2026);
-  const [cgpa, setCgpa] = useState(profile.education.selfReportedCGPA || 8.5);
+  const [degreeStatus, setDegreeStatus] = useState<'pursuing' | 'completed'>(profile.education.degreeStatus || 'pursuing');
+  const [gradingSystem, setGradingSystem] = useState<'cgpa' | 'percentage'>(profile.education.gradingSystem || 'cgpa');
+  const [totalSemesters, setTotalSemesters] = useState<number>(profile.education.totalSemesters || 8);
+  const [termsCompleted, setTermsCompleted] = useState<number>(profile.education.termsCompleted || Math.max(1, (profile.education.totalSemesters || 8) - 2));
+  const [scoreValue, setScoreValue] = useState<string>(
+    profile.education.gradingSystem === 'percentage' && profile.education.percentageValue
+      ? String(profile.education.percentageValue)
+      : String(profile.education.selfReportedCGPA || 8.5)
+  );
 
   // Step 2 State - Career Preferences
   const [targetRoles, setTargetRoles] = useState<string[]>(
@@ -57,12 +65,20 @@ export const StudentOnboarding: React.FC = () => {
   const handleComplete = async () => {
     setIsSubmitting(true);
     try {
+      const parsedScore = parseFloat(scoreValue) || 0;
+      const cgpaEquivalent = gradingSystem === 'percentage'
+        ? Number((Math.min(10, parsedScore / 9.5)).toFixed(2))
+        : Number(parsedScore.toFixed(2));
+      const percentageEquivalent = gradingSystem === 'percentage'
+        ? Number(parsedScore.toFixed(2))
+        : Number((parsedScore * 9.5).toFixed(2));
+
       // 1. Update Profile & Education
       updateProfile({
         name,
         college,
         headline: `${degree} in ${branch} • Aspiring ${targetRoles[0] || 'Software Engineer'}`,
-        careerStage: 'Final Year Student',
+        careerStage: degreeStatus === 'completed' ? 'Fresh Graduate' : 'Final Year Student',
         onboardingCompleted: true,
         preferences: {
           ...profile.preferences,
@@ -77,7 +93,13 @@ export const StudentOnboarding: React.FC = () => {
         degree,
         branch,
         expectedGraduationYear: Number(gradYear),
-        selfReportedCGPA: Number(cgpa),
+        degreeStatus,
+        gradingSystem,
+        totalSemesters: Number(totalSemesters),
+        termsCompleted: degreeStatus === 'completed' ? Number(totalSemesters) : Number(termsCompleted),
+        currentSemester: degreeStatus === 'completed' ? Number(totalSemesters) : Math.min(Number(totalSemesters), Number(termsCompleted) + 1),
+        selfReportedCGPA: cgpaEquivalent,
+        percentageValue: percentageEquivalent,
       });
 
       // 2. Upload CV if provided
@@ -197,16 +219,105 @@ export const StudentOnboarding: React.FC = () => {
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Cumulative CGPA</label>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Degree Status</label>
+                <select
+                  value={degreeStatus}
+                  onChange={(e) => setDegreeStatus(e.target.value as any)}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="pursuing">Currently Pursuing Degree</option>
+                  <option value="completed">Degree Completed / Graduated</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Evaluation Grading Metric</label>
+                <select
+                  value={gradingSystem}
+                  onChange={(e) => {
+                    const newSys = e.target.value as 'cgpa' | 'percentage';
+                    setGradingSystem(newSys);
+                    if (newSys === 'percentage' && parseFloat(scoreValue) <= 10) {
+                      setScoreValue((parseFloat(scoreValue) * 9.5).toFixed(1));
+                    } else if (newSys === 'cgpa' && parseFloat(scoreValue) > 10) {
+                      setScoreValue(Math.min(10, parseFloat(scoreValue) / 9.5).toFixed(2));
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value="cgpa">CGPA (0.00 – 10.00 Scale)</option>
+                  <option value="percentage">Percentage (0.0% – 100.0%)</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">Total Semesters in Program</label>
+                <select
+                  value={totalSemesters}
+                  onChange={(e) => {
+                    const val = Number(e.target.value);
+                    setTotalSemesters(val);
+                    if (termsCompleted >= val) {
+                      setTermsCompleted(Math.max(1, val - 1));
+                    }
+                  }}
+                  className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                >
+                  <option value={2}>2 Semesters (1 Year Post-Graduate/Diploma)</option>
+                  <option value={4}>4 Semesters (2 Year Program: M.Tech / MBA / MCA)</option>
+                  <option value={6}>6 Semesters (3 Year Program: BCA / B.Sc / B.Com)</option>
+                  <option value={8}>8 Semesters (4 Year Program: B.Tech / B.E)</option>
+                  <option value={10}>10 Semesters (5 Year Integrated Dual Degree)</option>
+                </select>
+              </div>
+
+              {degreeStatus === 'pursuing' ? (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Semesters Completed So Far</label>
+                  <select
+                    value={termsCompleted}
+                    onChange={(e) => setTermsCompleted(Number(e.target.value))}
+                    className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500 cursor-pointer"
+                  >
+                    {Array.from({ length: totalSemesters - 1 }, (_, i) => i + 1).map((sem) => (
+                      <option key={sem} value={sem}>
+                        {sem} {sem === 1 ? 'Semester' : 'Semesters'} Completed
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-xs font-semibold text-slate-300 mb-1.5">Program Completion Status</label>
+                  <div className="w-full px-3.5 py-2.5 bg-slate-950/60 border border-slate-800 rounded-xl text-sm text-emerald-400 font-medium">
+                    All {totalSemesters} Semesters Completed
+                  </div>
+                </div>
+              )}
+
+              <div className="sm:col-span-2">
+                <label className="block text-xs font-semibold text-slate-300 mb-1.5">
+                  {degreeStatus === 'completed'
+                    ? gradingSystem === 'percentage'
+                      ? 'Final Consolidated Percentage (%)'
+                      : 'Final Cumulative CGPA (out of 10.0)'
+                    : gradingSystem === 'percentage'
+                    ? `Current Consolidated Percentage across ${termsCompleted} Completed Semester(s) (%)`
+                    : `Current Cumulative CGPA across ${termsCompleted} Completed Semester(s) (out of 10.0)`}
+                </label>
                 <input
                   type="number"
                   step="0.01"
                   min="0"
-                  max="10"
-                  value={cgpa}
-                  onChange={(e) => setCgpa(Number(e.target.value))}
+                  max={gradingSystem === 'percentage' ? 100 : 10}
+                  value={scoreValue}
+                  onChange={(e) => setScoreValue(e.target.value)}
+                  placeholder={gradingSystem === 'percentage' ? 'e.g. 84.5' : 'e.g. 8.45'}
                   className="w-full px-3.5 py-2.5 bg-slate-950 border border-slate-800 rounded-xl text-sm text-white focus:outline-none focus:border-indigo-500"
                 />
+                <p className="text-[11px] text-slate-400 mt-1">
+                  Consolidated self-reported detail. Career Saathi respects privacy and does not require marksheets or transcripts.
+                </p>
               </div>
             </div>
 

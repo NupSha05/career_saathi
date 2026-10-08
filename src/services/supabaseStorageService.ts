@@ -5,7 +5,6 @@ export const CAREER_DOCUMENTS_BUCKET = 'career-documents';
 
 export type DocumentCategory =
   | 'academic_transcript'
-  | 'marksheet'
   | 'cv_resume'
   | 'jd_document'
   | 'certification_proof'

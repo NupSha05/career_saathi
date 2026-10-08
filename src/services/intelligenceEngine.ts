@@ -171,7 +171,7 @@ export function detectAcademicDiscrepancy(
   if (diff >= 0.1) {
     return {
       hasDiscrepancy: true,
-      note: `Conflicting records detected: Student self-reported ${selfReportedCGPA}, but uploaded transcript marksheet reports ${extractedCGPA}. Verified source requires student reconciliation before authoritative eligibility release.`,
+      note: `Conflicting records detected: Student self-reported ${selfReportedCGPA}, but official institution record reports ${extractedCGPA}. Please reconcile scores before authoritative eligibility release.`,
     };
   }
 
@@ -355,77 +355,170 @@ export function calculateContextualRoleFit(profile: StudentProfile, jd: Opportun
   };
 }
 
-// 5. READINESS DIMENSIONS CALCULATOR (Strictly Deterministic & Evidence-Grounded)
-export function calculateReadiness(profile: StudentProfile, recentPracticeSessions?: any[]): ReadinessDimensions {
+// 5. READINESS DIMENSIONS CALCULATOR (Contextual, Dynamic & Evidence-Grounded)
+export function calculateReadiness(
+  profile: StudentProfile,
+  recentPracticeSessions?: any[],
+  targetJD?: OpportunityJD,
+  applications?: any[],
+  historicalSnapshots?: any[]
+): ReadinessDimensions {
+  const missingInformation: string[] = [];
+  const positiveContributors: string[] = [];
+  const limitingFactors: string[] = [];
+
   // 1. Academic Readiness (0-100)
-  const cgpa = profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0;
+  let cgpa = profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0;
+  if (!cgpa && profile.education.percentageValue) {
+    cgpa = Math.min(10, profile.education.percentageValue / 9.5);
+  }
+
   let academicReadiness = 0;
   if (cgpa > 0) {
     academicReadiness = Math.round((cgpa / 10) * 85);
-    const termCalc = calculateDeterministicCGPA(profile.education.terms);
+    const termCalc = calculateDeterministicCGPA(profile.education.terms, profile.education.totalSemesters);
     if (termCalc.trajectory === 'Rising') academicReadiness += 10;
-    if (profile.education.discrepancyFlag) academicReadiness -= 15; // penalty until verified
+    if (profile.education.degreeStatus === 'completed') academicReadiness += 5;
     academicReadiness = Math.min(100, Math.max(10, academicReadiness));
+
+    positiveContributors.push(
+      profile.education.gradingSystem === 'percentage' && profile.education.percentageValue
+        ? `Consolidated academic performance: ${profile.education.percentageValue}% across ${profile.education.termsCompleted || profile.education.terms?.length || 'completed'} terms`
+        : `Consolidated academic standing: ${cgpa.toFixed(2)} CGPA (${profile.education.degreeStatus === 'completed' ? 'Degree Completed' : `${profile.education.termsCompleted || profile.education.terms?.length || 1} of ${profile.education.totalSemesters || 8} terms completed`})`
+    );
+  } else {
+    missingInformation.push('Consolidated academic records pending: enter your current CGPA or percentage in Pillar 2');
+    limitingFactors.push('Academic records not yet entered: cannot evaluate campus eligibility cutoffs');
   }
 
-  // 2. Profile Readiness (0-100) - strictly based on completed fields
+  // 2. Profile Readiness (0-100) - based on evidence depth
   let profileScore = 0;
   if (profile.name && profile.name.trim().length > 0) profileScore += 10;
   if (profile.college && profile.college.trim().length > 0) profileScore += 10;
   if (profile.headline && profile.headline.trim().length > 0) profileScore += 10;
   if (profile.about && profile.about.trim().length > 0) profileScore += 10;
   if (profile.education.institution && profile.education.degree) profileScore += 15;
-  if (profile.experiences && profile.experiences.length > 0) profileScore += 20;
-  if (profile.projects && profile.projects.length >= 1) profileScore += 10;
-  if (profile.projects && profile.projects.length >= 2) profileScore += 5;
-  if (profile.certifications && profile.certifications.length > 0) profileScore += 10;
+  if (profile.experiences && profile.experiences.length > 0) {
+    profileScore += Math.min(25, profile.experiences.length * 15);
+    positiveContributors.push(`${profile.experiences.length} verified work/internship experience record(s) with impact metrics`);
+  } else {
+    limitingFactors.push('No industry or internship tenure recorded in profile');
+  }
+  if (profile.projects && profile.projects.length >= 1) {
+    profileScore += Math.min(20, profile.projects.length * 10);
+    positiveContributors.push(`${profile.projects.length} repository project(s) showcasing practical implementation`);
+  } else {
+    limitingFactors.push('No portfolio projects recorded: add practical projects with repository links');
+  }
+  if (profile.certifications && profile.certifications.length > 0) {
+    profileScore += 10;
+  }
   const profileReadiness = Math.min(100, profileScore);
 
-  // 3. Skill Readiness (0-100)
+  // 3. Skill Readiness (0-100) - based on Level 0-4 evidence tiers
   let skillReadiness = 0;
   const totalSkills = profile.skills ? profile.skills.length : 0;
   if (totalSkills > 0) {
     const avgLevel = profile.skills.reduce((acc, s) => acc + s.evidenceLevel, 0) / totalSkills;
     skillReadiness = Math.min(100, Math.round((avgLevel / 4) * 80 + Math.min(20, totalSkills * 2)));
+    positiveContributors.push(`${totalSkills} registered competencies with average evidence Level ${avgLevel.toFixed(1)}/4`);
+  } else {
+    missingInformation.push('No technical skills registered: document capabilities in Pillar 3');
+    limitingFactors.push('Zero registered capabilities: cannot evaluate role competency matching');
   }
 
-  // 4. Opportunity Readiness (0-100)
-  let opportunityReadiness = 0;
-  if (academicReadiness > 0 || skillReadiness > 0) {
-    opportunityReadiness = Math.min(100, Math.round(academicReadiness * 0.4 + skillReadiness * 0.6));
+  // 4. Opportunity Readiness (0-100 or null if no opportunity analyzed)
+  let opportunityReadiness: number | null = null;
+  let opportunityReadinessNote: string | undefined;
+
+  if (targetJD && targetJD.title && targetJD.title !== 'General Role') {
+    const fit = calculateContextualRoleFit(profile, targetJD);
+    opportunityReadiness = fit.overallFitScore;
+    if (fit.eligibilityPassed) {
+      positiveContributors.push(`Eligible for target role at ${targetJD.company} (${fit.overallFitScore}% alignment)`);
+    } else {
+      limitingFactors.push(`Eligibility barriers identified for ${targetJD.company}: review cutoff and discipline requirements`);
+    }
+  } else {
+    opportunityReadinessNote = 'Opportunity readiness cannot yet be meaningfully assessed because you have not analyzed an active opportunity.';
+    missingInformation.push('No active target JD selected: upload or select a job description in Pillar 4');
   }
 
-  // 5. Interview Readiness (0-100)
+  // 5. Interview Readiness (0-100 or null if no practice completed)
+  let interviewReadiness: number | null = null;
+  let interviewReadinessNote: string | undefined;
   const sessions = recentPracticeSessions || [];
-  let interviewReadiness = 0;
+
   if (sessions.length > 0) {
     const avgScore = sessions.reduce((acc, s) => acc + (s.evaluation?.scoreOutOf10 || 6), 0) / sessions.length;
     interviewReadiness = Math.min(95, Math.round(avgScore * 9 + Math.min(10, sessions.length * 2)));
+    positiveContributors.push(`${sessions.length} structured practice session(s) completed with average evaluation ${avgScore.toFixed(1)}/10`);
+  } else {
+    interviewReadinessNote = 'Insufficient practice data recorded (complete mock practice sessions in Pillar 8).';
+    missingInformation.push('No interview practice sessions completed yet: practice STAR behavioral or technical questions in Pillar 8');
+    limitingFactors.push('No mock interview performance recorded to validate communication and problem-solving readiness');
   }
 
-  // Overall Weighted Aggregate
-  const overallScore = Math.round(
-    academicReadiness * 0.2 +
-    profileReadiness * 0.2 +
-    skillReadiness * 0.25 +
-    opportunityReadiness * 0.15 +
-    interviewReadiness * 0.2
-  );
+  // 6. Dynamic Contextual Aggregate (No arbitrary fixed weights!)
+  let overallScore = 0;
+  if (opportunityReadiness !== null && interviewReadiness !== null) {
+    // Full 5-dimension context
+    overallScore = Math.round(
+      academicReadiness * 0.20 +
+      profileReadiness * 0.20 +
+      skillReadiness * 0.25 +
+      opportunityReadiness * 0.15 +
+      interviewReadiness * 0.20
+    );
+  } else if (opportunityReadiness !== null && interviewReadiness === null) {
+    // 4 dimensions (no interview practice yet)
+    overallScore = Math.round(
+      academicReadiness * 0.25 +
+      profileReadiness * 0.25 +
+      skillReadiness * 0.30 +
+      opportunityReadiness * 0.20
+    );
+  } else if (opportunityReadiness === null && interviewReadiness !== null) {
+    // 4 dimensions (no opportunity selected yet)
+    overallScore = Math.round(
+      academicReadiness * 0.25 +
+      profileReadiness * 0.25 +
+      skillReadiness * 0.30 +
+      interviewReadiness * 0.20
+    );
+  } else {
+    // Foundational 3 dimensions (early career / onboarding baseline)
+    overallScore = Math.round(
+      academicReadiness * 0.35 +
+      profileReadiness * 0.30 +
+      skillReadiness * 0.35
+    );
+  }
 
-  const positiveContributors: string[] = [];
-  if (academicReadiness >= 75) positiveContributors.push(`Strong academic standing (${cgpa.toFixed(2)} CGPA)`);
-  if (profile.experiences && profile.experiences.length > 0) positiveContributors.push('Practical industry internship/work experience recorded');
-  if (skillReadiness >= 70) positiveContributors.push('Solid concentration of project-backed technical capabilities');
-  if (interviewReadiness >= 70) positiveContributors.push('Consistent practice coach performance across recent evaluations');
+  // 7. Trend Calculation from Actual Historical Snapshots
+  let trend: 'Improving' | 'Stable' | 'Declining' | 'Insufficient history' = 'Insufficient history';
+  if (historicalSnapshots && historicalSnapshots.length >= 2) {
+    const prev = historicalSnapshots[historicalSnapshots.length - 2];
+    if (prev && typeof prev.overallScore === 'number') {
+      if (overallScore > prev.overallScore) trend = 'Improving';
+      else if (overallScore < prev.overallScore) trend = 'Declining';
+      else trend = 'Stable';
+    }
+  }
 
-  const limitingFactors: string[] = [];
-  if (cgpa === 0) limitingFactors.push('Academic records not yet entered: record your semester SGPA to evaluate eligibility');
-  if (profile.education.discrepancyFlag) limitingFactors.push('Unresolved academic transcript discrepancy requires reconciliation');
-  if (totalSkills === 0) limitingFactors.push('No verified skills registered: add technical competencies with supporting evidence');
-  if (profile.projects.length === 0) limitingFactors.push('No portfolio projects: add practical projects to build Level 2-3 evidence');
-  if (sessions.length === 0) limitingFactors.push('No mock interview sessions completed yet: practice STAR technical and HR questions');
-  else if (interviewReadiness < 70) limitingFactors.push('Limited mock interview performance; practice structured framework responses');
-
+  // 8. Highest-Leverage Recommended Next Action
+  let recommendedNextAction = 'Update your academic trajectory in Pillar 2 to establish baseline eligibility.';
+  if (missingInformation.some((m) => m.includes('job description'))) {
+    recommendedNextAction = 'Analyze an active target Job Description in Pillar 4 to evaluate role fit and skill gaps.';
+  } else if (missingInformation.some((m) => m.includes('interview practice'))) {
+    recommendedNextAction = 'Complete a mock practice session using the STAR framework in Pillar 8.';
+  } else if (profile.projects.length === 0) {
+    recommendedNextAction = 'Document a repository project in Pillar 1 to elevate your practical skill evidence to Level 2.';
+  } else if (opportunityReadiness !== null && opportunityReadiness < 70) {
+    recommendedNextAction = 'Close the Three-Way gaps in Pillar 5 to align your CV with must-have job requirements.';
+  } else {
+    recommendedNextAction = 'Track active applications in Pillar 7 and practice upcoming interview questions in Pillar 8.';
+  }
 
   return {
     academicReadiness,
@@ -433,10 +526,15 @@ export function calculateReadiness(profile: StudentProfile, recentPracticeSessio
     skillReadiness,
     opportunityReadiness,
     interviewReadiness,
+    opportunityReadinessNote,
+    interviewReadinessNote,
     overallScore,
-    trend: 'improving',
+    trend,
     positiveContributors,
     limitingFactors,
+    missingInformation,
+    recommendedNextAction,
+    methodologyVersion: 'v2.1-contextual-evidence',
     lastCalculated: new Date().toISOString(),
   };
 }
@@ -510,7 +608,7 @@ export function generatePrioritizedActions(
   }
 
   // Interview practice
-  if (readiness.interviewReadiness < 75) {
+  if (readiness.interviewReadiness !== null && readiness.interviewReadiness < 75) {
     actions.push({
       id: 'act-practice-behavioral',
       title: 'Complete 2 STAR Method Behavioral Practice Questions',

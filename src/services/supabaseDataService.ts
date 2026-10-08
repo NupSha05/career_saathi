@@ -109,7 +109,21 @@ function requireClient() {
 // 1. STUDENT PROFILE & ASSOCIATED DOMAINS
 export async function fetchFullStudentProfile(userId: string): Promise<StudentProfile | null> {
   const localKey = `careersaathi_profile_${userId}`;
-  const localCachedProfile = getLocalItem<StudentProfile | null>(localKey, null);
+  let localCachedProfile = getLocalItem<StudentProfile | null>(localKey, null);
+
+  // 1a. Attempt server profile fetch to guarantee persistence across sessions & browsers
+  try {
+    const res = await fetch(`/api/auth/profile/${userId}`);
+    if (res.ok) {
+      const json = await res.json();
+      if (json?.profile) {
+        localCachedProfile = { ...(localCachedProfile || {}), ...json.profile };
+        setLocalItem(localKey, localCachedProfile);
+      }
+    }
+  } catch {
+    // offline/network fallback
+  }
 
   let supabase;
   try {
@@ -118,7 +132,7 @@ export async function fetchFullStudentProfile(userId: string): Promise<StudentPr
     return localCachedProfile;
   }
 
-  // 1a. Fetch student_profiles
+  // 1b. Fetch student_profiles from Supabase if connected
   try {
     const { data: profileRow, error: profileErr } = await supabase
       .from('student_profiles')
@@ -352,6 +366,17 @@ export async function upsertStudentProfile(userId: string, updates: Partial<Stud
   const merged = { ...existing, ...updates, updated_at: new Date().toISOString() };
   setLocalItem(localKey, merged);
 
+  // Sync to server database
+  try {
+    fetch(`/api/auth/profile/${userId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(merged),
+    }).catch(() => {});
+  } catch {
+    // ignore
+  }
+
   let supabase;
   try {
     supabase = requireClient();
@@ -411,6 +436,15 @@ export async function upsertEducation(userId: string, profileId: string, edu: Pa
   if (existingProfile) {
     existingProfile.education = { ...existingProfile.education, ...edu };
     setLocalItem(profileKey, existingProfile);
+    try {
+      fetch(`/api/auth/profile/${userId}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(existingProfile),
+      }).catch(() => {});
+    } catch {
+      // ignore
+    }
   }
 
   let supabase;

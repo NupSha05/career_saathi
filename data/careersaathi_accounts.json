@@ -1,0 +1,13 @@
+[
+  {
+    "id": "usr-1791434924997-rhigu",
+    "email": "student.test@campus.edu",
+    "password": "Password123!",
+    "name": "Ananya Sen",
+    "college": "IIT Delhi",
+    "branch": "Computer Science & Engineering",
+    "role": "student",
+    "createdAt": "2026-10-08T04:48:44.997Z",
+    "lastSignInAt": "2026-10-08T04:48:45.014Z"
+  }
+]

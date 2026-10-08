@@ -6,7 +6,7 @@ export interface AuthUser {
   email: string;
   name: string;
   role: 'student' | 'job_seeker';
-  authProvider: 'supabase' | 'local' | 'guest';
+  authProvider: 'supabase' | 'local' | 'guest' | 'server_database' | 'local_persistent';
   createdAt: string;
   lastSignInAt?: string;
 }

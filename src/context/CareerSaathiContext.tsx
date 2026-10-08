@@ -6,6 +6,7 @@ import {
   CVAnalysis,
   LinkedInAnalysis,
   ApplicationRecord,
+  ApplicationEvent,
   PracticeSession,
   ReadinessDimensions,
   ReadinessSnapshot,
@@ -33,6 +34,7 @@ import {
   DEFAULT_PRODUCTION_JDS,
 } from '../fixtures/demoData';
 import { getSupabaseClient, isSupabaseConfigured } from '../services/supabaseClient';
+import { authService } from '../services/authService';
 import * as dbService from '../services/supabaseDataService';
 
 /**
@@ -211,10 +213,17 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const [isAiProcessing, setIsAiProcessing] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  const [readinessSnapshots, setReadinessSnapshots] = useState<ReadinessSnapshot[]>(() => {
+    if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
+      return DEMO_READINESS_SNAPSHOTS;
+    }
+    return [];
+  });
+
   // 5. Derived Deterministic State
   const readiness = useMemo(() => {
-    return calculateReadiness(profile, practiceSessions);
-  }, [profile, practiceSessions]);
+    return calculateReadiness(profile, practiceSessions, activeJD, applications, readinessSnapshots);
+  }, [profile, practiceSessions, activeJD, applications, readinessSnapshots]);
 
   const currentFitReport = useMemo(() => {
     return calculateContextualRoleFit(profile, activeJD);
@@ -223,13 +232,6 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const actions = useMemo(() => {
     return generatePrioritizedActions(profile, readiness, activeJD);
   }, [profile, readiness, activeJD]);
-
-  const [readinessSnapshots, setReadinessSnapshots] = useState<ReadinessSnapshot[]>(() => {
-    if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
-      return DEMO_READINESS_SNAPSHOTS;
-    }
-    return [];
-  });
 
   // Track readiness snapshot evolution
   useEffect(() => {
@@ -256,7 +258,7 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [readiness, isDemoMode, profile.name, currentAuthUser?.id, profile.id]);
 
-  // Load authenticated student data from Supabase
+  // Load authenticated student data from Supabase or persistent local store
   const loadUserDataFromSupabase = useCallback(async (userId: string, userEmail: string, userName?: string) => {
     try {
       setAuthLoading(true);
@@ -314,64 +316,31 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (dbLinkedIn) setLinkedInAnalysis(dbLinkedIn);
 
     } catch (err) {
-      console.error('Error loading data from Supabase:', err);
+      console.error('Error loading user data:', err);
     } finally {
       setAuthLoading(false);
     }
   }, []);
 
-  // Initialize Supabase Auth Session listener
+  // Initialize Session listener
   useEffect(() => {
-    const supabase = getSupabaseClient();
-    if (!supabase || !isSupabaseConfigured()) {
-      setIsSupabaseConnected(false);
-      setAuthStatus('unauthenticated');
-      return;
-    }
-
-    setIsSupabaseConnected(true);
-
-    // Initial session check
-    supabase.auth.getSession().then(({ data: { session }, error }) => {
-      if (error) {
-        console.error('Session retrieval error:', error);
-        setAuthStatus('unauthenticated');
-        return;
-      }
-
-      if (session?.user && !isDemoMode) {
-        const u = session.user;
-        const name = (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || 'Student';
-        setCurrentAuthUser({
-          id: u.id,
-          email: u.email || '',
-          name,
-          role: 'student',
-          authProvider: 'supabase',
-          createdAt: u.created_at,
-        });
+    authService.getSession().then(({ user }) => {
+      if (user && !isDemoMode) {
+        setCurrentAuthUser(user);
         setAuthStatus('authenticated');
-        loadUserDataFromSupabase(u.id, u.email || '', name);
+        loadUserDataFromSupabase(user.id, user.email, user.name);
       } else {
         setAuthStatus('unauthenticated');
       }
+    }).catch(() => {
+      setAuthStatus('unauthenticated');
     });
 
-    // Listen for auth changes
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      if (session?.user && !isDemoMode) {
-        const u = session.user;
-        const name = (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || 'Student';
-        setCurrentAuthUser({
-          id: u.id,
-          email: u.email || '',
-          name,
-          role: 'student',
-          authProvider: 'supabase',
-          createdAt: u.created_at,
-        });
+    const sub = authService.onAuthStateChange((_event, session, authUser) => {
+      if (authUser && !isDemoMode) {
+        setCurrentAuthUser(authUser);
         setAuthStatus('authenticated');
-        loadUserDataFromSupabase(u.id, u.email || '', name);
+        loadUserDataFromSupabase(authUser.id, authUser.email, authUser.name);
       } else if (!session && !isDemoMode) {
         setCurrentAuthUser(null);
         setAuthStatus('unauthenticated');
@@ -379,106 +348,68 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     });
 
     return () => {
-      subscription.unsubscribe();
+      sub.unsubscribe();
     };
   }, [isDemoMode, loadUserDataFromSupabase]);
 
   // Auth Operations
   const signIn = async (email: string, password: string) => {
-    const supabase = getSupabaseClient();
-    if (!supabase || !isSupabaseConfigured()) {
-      throw new Error('Supabase is not configured. Please supply VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
-    }
-
     setAuthLoading(true);
     setAuthError(null);
-
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) {
-      setAuthLoading(false);
-      setAuthError(error.message);
-      throw error;
-    }
-
-    if (data.user) {
+    try {
+      const user = await authService.signIn(email, password);
       setIsDemoMode(false);
       localStorage.removeItem(DEMO_MODE_FLAG);
-      const name = (data.user.user_metadata?.full_name as string) || data.user.email?.split('@')[0] || 'Student';
-      setCurrentAuthUser({
-        id: data.user.id,
-        email: data.user.email || '',
-        name,
-        role: 'student',
-        authProvider: 'supabase',
-        createdAt: data.user.created_at,
-      });
+      setCurrentAuthUser(user);
       setAuthStatus('authenticated');
-      await loadUserDataFromSupabase(data.user.id, data.user.email || '', name);
+      await loadUserDataFromSupabase(user.id, user.email, user.name);
+    } catch (err: any) {
+      setAuthError(err.message || 'Authentication failed.');
+      throw err;
+    } finally {
+      setAuthLoading(false);
     }
-    setAuthLoading(false);
   };
 
   const signUp = async (creds: AuthCredentials) => {
-    const supabase = getSupabaseClient();
-    if (!supabase || !isSupabaseConfigured()) {
-      throw new Error('Supabase is not configured. Please supply VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
-    }
-
     setAuthLoading(true);
     setAuthError(null);
-
-    const { data, error } = await supabase.auth.signUp({
-      email: creds.email,
-      password: creds.password,
-      options: {
-        data: {
-          full_name: creds.fullName || '',
-          college: creds.college || '',
-          branch: creds.branch || '',
-        },
-      },
-    });
-
-    if (error) {
-      setAuthLoading(false);
-      setAuthError(error.message);
-      throw error;
-    }
-
-    if (data.user) {
+    try {
+      const user = await authService.signUp(creds);
       setIsDemoMode(false);
       localStorage.removeItem(DEMO_MODE_FLAG);
-      const name = creds.fullName || data.user.email?.split('@')[0] || 'Student';
-      setCurrentAuthUser({
-        id: data.user.id,
-        email: data.user.email || '',
-        name,
-        role: 'student',
-        authProvider: 'supabase',
-        createdAt: data.user.created_at,
-      });
+      setCurrentAuthUser(user);
       setAuthStatus('authenticated');
 
-      // Initialize base profile in DB
+      // Initialize base profile in persistent store
       const initialProfile = createBlankProductionProfile();
-      initialProfile.id = data.user.id;
-      initialProfile.name = name;
-      initialProfile.email = data.user.email || '';
+      initialProfile.id = user.id;
+      initialProfile.name = user.name;
+      initialProfile.email = user.email || '';
       initialProfile.college = creds.college || '';
       initialProfile.education.institution = creds.college || '';
       initialProfile.education.branch = creds.branch || 'Computer Science & Engineering';
 
       setProfile(initialProfile);
-      await dbService.upsertStudentProfile(data.user.id, initialProfile);
-      await dbService.upsertEducation(data.user.id, initialProfile.id, initialProfile.education);
+      await dbService.upsertStudentProfile(user.id, initialProfile);
+      await dbService.upsertEducation(user.id, initialProfile.id, initialProfile.education);
+    } catch (err: any) {
+      setAuthError(err.message || 'Registration failed.');
+      throw err;
+    } finally {
+      setAuthLoading(false);
     }
-    setAuthLoading(false);
   };
 
   const signOut = async () => {
+    await authService.signOut();
     const supabase = getSupabaseClient();
     if (supabase) {
-      await supabase.auth.signOut();
+      try {
+        await supabase.auth.signOut();
+      } catch {
+        // ignore
+      }
     }
     setCurrentAuthUser(null);
     setAuthStatus('unauthenticated');
@@ -569,16 +500,18 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     };
     setEventImpactLog((prev) => [newRecord, ...prev]);
 
-    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
-      dbService.saveEventImpactLogToDb(currentAuthUser.id, profile.id, newRecord).catch(() => {});
+    const uid = currentAuthUser?.id || profile.id;
+    if (!isDemoMode && uid) {
+      dbService.saveEventImpactLogToDb(uid, profile.id, newRecord).catch(() => {});
     }
   };
 
   const updateProfile = (updated: Partial<StudentProfile>) => {
     setProfile((prev) => {
       const next = { ...prev, ...updated };
-      if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
-        dbService.upsertStudentProfile(currentAuthUser.id, next).catch((err) =>
+      const uid = currentAuthUser?.id || prev.id;
+      if (!isDemoMode && uid) {
+        dbService.upsertStudentProfile(uid, next).catch((err) =>
           console.warn('Persist profile warning (safely stored locally):', err?.message || err)
         );
       }
@@ -597,8 +530,9 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setProfile((prev) => {
       const newEdu = { ...prev.education, ...edu };
       const next = { ...prev, education: newEdu };
-      if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
-        dbService.upsertEducation(currentAuthUser.id, prev.id, newEdu).catch((err) =>
+      const uid = currentAuthUser?.id || prev.id;
+      if (!isDemoMode && uid) {
+        dbService.upsertEducation(uid, prev.id, newEdu).catch((err) =>
           console.warn('Persist education warning (safely stored locally):', err?.message || err)
         );
       }
@@ -622,8 +556,9 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
       projects: [newProj, ...prev.projects],
     }));
 
-    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
-      dbService.addProjectToDb(currentAuthUser.id, profile.id, proj).then((dbId) => {
+    const uid = currentAuthUser?.id || profile.id;
+    if (!isDemoMode && uid) {
+      dbService.addProjectToDb(uid, profile.id, proj).then((dbId) => {
         setProfile((prev) => ({
           ...prev,
           projects: prev.projects.map((p) => (p.id === tempId ? { ...p, id: dbId } : p)),
@@ -648,8 +583,9 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
       skills: [...prev.skills, newSkill],
     }));
 
-    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
-      dbService.addSkillToDb(currentAuthUser.id, profile.id, skill).then((dbId) => {
+    const uid = currentAuthUser?.id || profile.id;
+    if (!isDemoMode && uid) {
+      dbService.addSkillToDb(uid, profile.id, skill).then((dbId) => {
         setProfile((prev) => ({
           ...prev,
           skills: prev.skills.map((s) => (s.id === tempId ? { ...s, id: dbId } : s)),
@@ -679,8 +615,9 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setAllJDs((prev) => [jd, ...prev]);
     setActiveJDState(jd);
 
-    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
-      dbService.saveJobDescriptionToDb(currentAuthUser.id, profile.id, jd).catch((err) =>
+    const uid = currentAuthUser?.id || profile.id;
+    if (!isDemoMode && uid) {
+      dbService.saveJobDescriptionToDb(uid, profile.id, jd).catch((err) =>
         console.error('Failed to persist JD:', err)
       );
     }
@@ -700,22 +637,51 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setApplications((prev) =>
       prev.map((app) => {
         if (app.id !== appId) return app;
+        const prevStage = app.stage;
         const newHistory = [...app.history, { stage: newStage, timestamp: now, comment: note }];
+        const newEvent: ApplicationEvent = {
+          id: `ev-app-${Date.now()}`,
+          applicationId: app.id,
+          previousStage: prevStage,
+          newStage,
+          eventType: 'Stage Transition',
+          eventDate: now.slice(0, 10),
+          notes: note || `Moved from ${prevStage} to ${newStage}`,
+          created_at: now,
+        };
+
+        let healthCategory: ApplicationRecord['healthCategory'] = 'Healthy';
+        let healthRationale = `Active in stage: ${newStage}.`;
+        if (newStage === 'Selected') {
+          healthCategory = 'Completed / Closed';
+          healthRationale = 'Selection achieved! Application closed as successful offer.';
+        } else if (newStage === 'Rejected' || newStage === 'Withdrawn') {
+          healthCategory = 'Completed / Closed';
+          healthRationale = `Application closed (${newStage}).`;
+        } else if (newStage === 'Assessment Pending' || newStage === 'Interview Pending' || newStage === 'GD Pending') {
+          healthCategory = 'Requires Attention';
+          healthRationale = `Action required: ${newStage}. Practice targeted preparation in Pillar 8.`;
+        }
+
         const modified: ApplicationRecord = {
           ...app,
           stage: newStage,
           stageUpdatedDate: now,
+          healthCategory,
+          healthRationale,
           history: newHistory,
+          events: [...(app.events || []), newEvent],
         };
         updatedApp = modified;
         return modified;
       })
     );
 
-    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured() && updatedApp) {
+    const uid = currentAuthUser?.id || profile.id;
+    if (!isDemoMode && uid && updatedApp) {
       const appRef: ApplicationRecord = updatedApp;
       dbService.updateApplicationStageInDb(
-        currentAuthUser.id,
+        uid,
         appId,
         newStage,
         appRef.healthCategory,
@@ -727,27 +693,41 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     logEventImpact(
       `Application Stage Advanced: "${newStage}"`,
       'Pillar 7: Application Intelligence',
-      ['Application Pipeline', 'Interview Priority'],
-      'Transitioned lifecycle state.'
+      ['Interview Readiness', 'Application Pipeline'],
+      `Transitioned application stage to ${newStage}.`
     );
   };
 
   const addApplication = (appData: Omit<ApplicationRecord, 'id' | 'healthCategory' | 'healthRationale' | 'history' | 'stageUpdatedDate'>) => {
     const tempId = `app-${Date.now()}`;
     const now = new Date().toISOString();
+    const initialEvent: ApplicationEvent = {
+      id: `ev-app-${Date.now()}`,
+      applicationId: tempId,
+      previousStage: null,
+      newStage: appData.stage,
+      eventType: 'Application Created',
+      eventDate: appData.appliedDate || now.slice(0, 10),
+      notes: appData.notes || 'Recorded in application tracker',
+      created_at: now,
+    };
+
     const newApp: ApplicationRecord = {
       ...appData,
       id: tempId,
+      applicationType: appData.applicationType || 'Off-Campus',
       stageUpdatedDate: now,
       healthCategory: 'Healthy',
       healthRationale: 'Application newly recorded in active tracking lifecycle.',
       history: [{ stage: appData.stage, timestamp: now, comment: 'Logged in tracker' }],
+      events: [initialEvent],
     };
 
     setApplications((prev) => [newApp, ...prev]);
 
-    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
-      dbService.saveApplicationToDb(currentAuthUser.id, profile.id, newApp).then((dbId) => {
+    const uid = currentAuthUser?.id || profile.id;
+    if (!isDemoMode && uid) {
+      dbService.saveApplicationToDb(uid, profile.id, newApp).then((dbId) => {
         setApplications((prev) =>
           prev.map((a) => (a.id === tempId ? { ...a, id: dbId } : a))
         );
@@ -757,8 +737,8 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     logEventImpact(
       `Application Tracked: ${newApp.company} (${newApp.role})`,
       'Pillar 7: Application Intelligence',
-      ['Application Funnel'],
-      'Added to lifecycle pipeline.'
+      ['Application Funnel', 'Interview Readiness'],
+      `Added ${newApp.company} to lifecycle tracker.`
     );
   };
 
@@ -773,8 +753,9 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
     setPracticeSessions((prev) => [newSession, ...prev]);
 
-    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
-      dbService.savePracticeSessionToDb(currentAuthUser.id, profile.id, newSession).then((dbId) => {
+    const uid = currentAuthUser?.id || profile.id;
+    if (!isDemoMode && uid) {
+      dbService.savePracticeSessionToDb(uid, profile.id, newSession).then((dbId) => {
         setPracticeSessions((prev) =>
           prev.map((s) => (s.id === tempId ? { ...s, id: dbId } : s))
         );

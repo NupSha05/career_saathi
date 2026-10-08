@@ -85,7 +85,7 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ setActiveTab, onOp
                 Career Readiness Index
               </span>
               <span className="text-xs px-2.5 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-medium">
-                {readiness.trend === 'improving' ? '↑ Trend: Improving' : '→ Trend: Stable'}
+                {readiness.trend === 'Improving' ? '↑ Trend: Improving' : '→ Trend: Stable'}
               </span>
             </div>
 

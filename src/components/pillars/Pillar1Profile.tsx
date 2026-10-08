@@ -230,8 +230,14 @@ export const Pillar1Profile: React.FC = () => {
               <GraduationCap className="w-4 h-4 text-blue-400" />
               Academic Credentials
             </h2>
-            <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded font-semibold border border-indigo-500/30">
-              Semester {profile.education.currentSemester} / {profile.education.totalSemesters}
+            <span className={`text-[10px] px-2 py-0.5 rounded font-semibold border ${
+              profile.education.degreeStatus === 'completed'
+                ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                : 'bg-indigo-500/20 text-indigo-300 border-indigo-500/30'
+            }`}>
+              {profile.education.degreeStatus === 'completed'
+                ? `Graduated • All ${profile.education.totalSemesters} Semesters`
+                : `${profile.education.termsCompleted || Math.max(1, profile.education.currentSemester - 1)} of ${profile.education.totalSemesters} Semesters Completed (Pursuing)`}
             </span>
           </div>
 
@@ -243,14 +249,24 @@ export const Pillar1Profile: React.FC = () => {
               {profile.education.institution || 'Institution not recorded'}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">
-              Duration: {profile.education.startYear} – {profile.education.expectedGraduationYear} (Expected)
+              Graduation: {profile.education.expectedGraduationYear || 2026} {profile.education.degreeStatus === 'completed' ? '(Completed)' : '(Expected)'}
             </p>
 
-            <div className="mt-3 pt-3 border-t border-slate-700/60 flex items-center justify-between text-xs">
-              <span className="text-slate-300">Authoritative CGPA:</span>
-              <span className="font-bold text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">
-                {(profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0).toFixed(2)} / 10.0
-              </span>
+            <div className="mt-3 pt-3 border-t border-slate-700/60 grid grid-cols-2 gap-3 text-xs">
+              <div>
+                <span className="text-slate-400 block text-[11px]">Cumulative CGPA:</span>
+                <span className="font-bold text-emerald-400 text-sm">
+                  {(profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0).toFixed(2)} / 10.0
+                </span>
+              </div>
+              <div>
+                <span className="text-slate-400 block text-[11px]">Equivalent Percentage:</span>
+                <span className="font-bold text-blue-400 text-sm">
+                  {profile.education.percentageValue
+                    ? profile.education.percentageValue.toFixed(1)
+                    : ((profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0) * 9.5).toFixed(1)}%
+                </span>
+              </div>
             </div>
           </div>
         </div>
