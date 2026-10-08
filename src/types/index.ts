@@ -339,7 +339,7 @@ export interface EmailLogEntry {
   id: string;
   timestamp: string;
   recipient: string;
-  recipientRole: string;
+  recipientRole?: string;
   reportTitle: string;
   subject: string;
   status: 'SENT' | 'FAILED' | 'PENDING_APPROVAL' | 'AUDIT_LOGGED' | 'SIMULATED_PREVIEW';

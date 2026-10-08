@@ -13,6 +13,7 @@ import {
   Calendar,
   Layers,
   Sparkles,
+  FileDown,
 } from 'lucide-react';
 import { TabType } from '../Navigation';
 
@@ -55,10 +56,18 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ setActiveTab, onOp
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2.5 flex-wrap">
+            <button
+              onClick={() => setActiveTab('report-center')}
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-2"
+              title="View and email complete profile analysis & recommendations"
+            >
+              <FileDown className="w-4 h-4 text-emerald-400" />
+              <span>Profile Analysis Report</span>
+            </button>
             <button
               onClick={() => setActiveTab('pillar-4-opportunity')}
-              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-4 py-2.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-2"
+              className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2.5 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-2"
             >
               <Briefcase className="w-4 h-4 text-indigo-400" />
               <span>Target: {activeJD.company}</span>

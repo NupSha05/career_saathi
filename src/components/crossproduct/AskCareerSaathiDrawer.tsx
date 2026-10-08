@@ -66,13 +66,13 @@ export const AskCareerSaathiDrawer: React.FC<AskCareerSaathiDrawerProps> = ({ is
         },
         academics: {
           currentCGPA: profile.education.verifiedCGPA || profile.education.selfReportedCGPA,
-          termsCompleted: profile.education.terms.length,
+          termsCompleted: profile.education.termsCompleted || (profile.education.terms?.length ?? 0),
           totalTerms: profile.education.totalSemesters,
           discrepancyFlag: profile.education.discrepancyFlag,
         },
-        skills: profile.skills.map((s) => ({ name: s.name, level: s.evidenceLevel, proof: s.supportingEvidence })),
-        projects: profile.projects.map((p) => ({ title: p.title, stack: p.techStack, level: p.evidenceLevel })),
-        experiences: profile.experiences.map((e) => ({ role: e.role, company: e.company, metrics: e.impactMetrics })),
+        skills: (profile.skills || []).map((s) => ({ name: s.name, level: s.evidenceLevel, proof: s.supportingEvidence })),
+        projects: (profile.projects || []).map((p) => ({ title: p.title, stack: p.techStack, level: p.evidenceLevel })),
+        experiences: (profile.experiences || []).map((e) => ({ role: e.role, company: e.company, metrics: e.impactMetrics })),
         readiness: {
           overall: readiness.overallScore,
           academic: readiness.academicReadiness,

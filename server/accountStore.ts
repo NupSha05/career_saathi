@@ -164,10 +164,10 @@ export const AccountStore = {
         email: account.email,
         phone: '',
         college: account.college || '',
-        headline: `${account.branch || 'Engineering'} Student`,
+        headline: `${account.branch || 'Computer Science & Engineering'} Student`,
         about: '',
         careerStage: 'Final Year Student',
-        onboardingCompleted: false,
+        onboardingCompleted: true,
         linkedInUrl: '',
         githubUrl: '',
         portfolioUrl: '',
@@ -209,6 +209,15 @@ export const AccountStore = {
       };
       profilesCache[account.id] = profile;
       persistProfiles();
+    } else {
+      // Ensure onboardingCompleted is set to true and account details are preserved
+      profile.onboardingCompleted = true;
+      if (account.name && !profile.name) profile.name = account.name;
+      if (account.college && !profile.college) profile.college = account.college;
+      if (account.college && !profile.education?.institution) {
+        profile.education = { ...(profile.education || {}), institution: account.college };
+      }
+      persistProfiles();
     }
 
     return { user: account, profile };
@@ -240,8 +249,61 @@ export const AccountStore = {
         id: account.id,
         name: account.name,
         email: account.email,
+        phone: '',
         college: account.college || '',
+        headline: `${account.branch || 'Computer Science & Engineering'} Student`,
+        about: '',
+        careerStage: 'Final Year Student',
+        onboardingCompleted: true,
+        linkedInUrl: '',
+        githubUrl: '',
+        portfolioUrl: '',
         education: {
+          id: `edu-${account.id}`,
+          institution: account.college || '',
+          degree: 'B.Tech',
+          branch: account.branch || 'Computer Science & Engineering',
+          startYear: 2022,
+          expectedGraduationYear: 2026,
+          totalSemesters: 8,
+          termsCompleted: 6,
+          currentSemester: 7,
+          degreeStatus: 'pursuing',
+          gradingSystem: 'cgpa',
+          selfReportedCGPA: 8.5,
+          verifiedCGPA: 8.5,
+          terms: [],
+        },
+        preferences: {
+          targetRoles: ['Software Development Engineer', 'Full Stack Developer'],
+          preferredLocations: ['Bengaluru', 'Hyderabad', 'Remote'],
+          minAcceptableCTC: '₹12,00,000',
+          preferredWorkType: 'Hybrid',
+          willingToRelocate: true,
+        },
+        skills: [],
+        projects: [],
+        experiences: [],
+        certifications: [],
+        readinessScores: {
+          academic: 85,
+          profile: 80,
+          skill: 78,
+          opportunity: 82,
+          interview: 75,
+          overall: 80,
+        },
+      };
+      profilesCache[account.id] = profile;
+      persistProfiles();
+    } else {
+      // Guarantee all necessary structures exist
+      profile.onboardingCompleted = true;
+      if (!profile.name && account.name) profile.name = account.name;
+      if (!profile.college && account.college) profile.college = account.college;
+      if (!profile.education) {
+        profile.education = {
+          id: `edu-${account.id}`,
           institution: account.college || '',
           degree: 'B.Tech',
           branch: account.branch || 'Computer Science & Engineering',
@@ -252,14 +314,17 @@ export const AccountStore = {
           gradingSystem: 'cgpa',
           selfReportedCGPA: 8.5,
           verifiedCGPA: 8.5,
-        },
-        onboardingCompleted: true,
-        preferences: {
-          targetRoles: ['Software Engineer'],
-          preferredWorkType: 'Hybrid',
-        },
-      };
-      profilesCache[account.id] = profile;
+          terms: [],
+        };
+      }
+      if (!profile.education.institution && account.college) {
+        profile.education.institution = account.college;
+      }
+      if (!Array.isArray(profile.education.terms)) profile.education.terms = [];
+      if (!Array.isArray(profile.skills)) profile.skills = [];
+      if (!Array.isArray(profile.projects)) profile.projects = [];
+      if (!Array.isArray(profile.experiences)) profile.experiences = [];
+      if (!Array.isArray(profile.certifications)) profile.certifications = [];
       persistProfiles();
     }
 
@@ -268,7 +333,76 @@ export const AccountStore = {
 
   getProfile(userId: string): any {
     loadProfiles();
-    return profilesCache[userId] || null;
+    loadAccounts();
+    let profile = profilesCache[userId] || null;
+    if (profile) {
+      if (!Array.isArray(profile.education?.terms)) {
+        if (!profile.education) profile.education = {};
+        profile.education.terms = [];
+      }
+      if (!Array.isArray(profile.skills)) profile.skills = [];
+      if (!Array.isArray(profile.projects)) profile.projects = [];
+      if (!Array.isArray(profile.experiences)) profile.experiences = [];
+      if (!Array.isArray(profile.certifications)) profile.certifications = [];
+      profile.onboardingCompleted = true;
+    } else {
+      // If profile not yet created but account exists, synthesize it
+      const account = accountsCache.find((a) => a.id === userId);
+      if (account) {
+        profile = {
+          id: account.id,
+          name: account.name,
+          email: account.email,
+          phone: '',
+          college: account.college || '',
+          headline: `${account.branch || 'Computer Science'} Student`,
+          about: '',
+          careerStage: 'Final Year Student',
+          onboardingCompleted: true,
+          linkedInUrl: '',
+          githubUrl: '',
+          portfolioUrl: '',
+          education: {
+            id: `edu-${account.id}`,
+            institution: account.college || '',
+            degree: 'B.Tech',
+            branch: account.branch || 'Computer Science & Engineering',
+            startYear: 2022,
+            expectedGraduationYear: 2026,
+            degreeStatus: 'pursuing',
+            gradingSystem: 'cgpa',
+            totalSemesters: 8,
+            termsCompleted: 6,
+            currentSemester: 7,
+            selfReportedCGPA: 8.5,
+            verifiedCGPA: 8.5,
+            terms: [],
+          },
+          preferences: {
+            targetRoles: ['Software Development Engineer', 'Full Stack Developer'],
+            preferredLocations: ['Bengaluru', 'Hyderabad', 'Remote'],
+            minAcceptableCTC: '₹12,00,000',
+            preferredWorkType: 'Hybrid',
+            willingToRelocate: true,
+          },
+          skills: [],
+          projects: [],
+          experiences: [],
+          certifications: [],
+          readinessScores: {
+            academic: 85,
+            profile: 80,
+            skill: 78,
+            opportunity: 82,
+            interview: 75,
+            overall: 80,
+          },
+        };
+        profilesCache[account.id] = profile;
+        persistProfiles();
+      }
+    }
+    return profile;
   },
 
   saveProfile(userId: string, profileData: any): any {
@@ -278,6 +412,24 @@ export const AccountStore = {
       ...existing,
       ...profileData,
       id: userId,
+      onboardingCompleted: true,
+      education: {
+        ...(existing.education || {}),
+        ...(profileData.education || {}),
+        terms: profileData.education?.terms || existing.education?.terms || [],
+      },
+      preferences: {
+        ...(existing.preferences || {}),
+        ...(profileData.preferences || {}),
+      },
+      readinessScores: {
+        ...(existing.readinessScores || {}),
+        ...(profileData.readinessScores || {}),
+      },
+      skills: Array.isArray(profileData.skills) ? profileData.skills : (existing.skills || []),
+      projects: Array.isArray(profileData.projects) ? profileData.projects : (existing.projects || []),
+      experiences: Array.isArray(profileData.experiences) ? profileData.experiences : (existing.experiences || []),
+      certifications: Array.isArray(profileData.certifications) ? profileData.certifications : (existing.certifications || []),
       updated_at: new Date().toISOString(),
     };
     profilesCache[userId] = merged;

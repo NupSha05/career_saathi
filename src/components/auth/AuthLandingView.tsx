@@ -39,57 +39,8 @@ export const AuthLandingView: React.FC = () => {
   const { enableDemoMode } = useCareerSaathi();
   const [authModalMode, setAuthModalMode] = useState<'signin' | 'signup' | null>(null);
 
-  const isConfigured = isSupabaseConfigured();
-  const diagnostic = getDiagnosticReport();
-
   return (
     <div className="py-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto space-y-12 animate-in fade-in duration-300">
-      {/* Infrastructure Alert if Supabase config is missing */}
-      {!isConfigured && (
-        <div className="p-6 bg-slate-900/90 border border-amber-500/30 rounded-3xl shadow-2xl space-y-4">
-          <div className="flex items-start justify-between">
-            <div className="flex items-center space-x-3">
-              <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center text-amber-400">
-                <AlertCircle className="w-5 h-5" />
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-white">Supabase Infrastructure Configuration Notice</h3>
-                <p className="text-xs text-amber-300/80">
-                  Career Saathi AI is configured for authoritative Supabase persistence (PostgreSQL + Auth + Storage).
-                </p>
-              </div>
-            </div>
-            <span className="px-3 py-1 bg-amber-500/10 border border-amber-500/30 text-amber-300 rounded-full text-xs font-mono">
-              Setup Pending
-            </span>
-          </div>
-
-          <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-xs font-mono text-slate-300 space-y-2">
-            <div className="text-slate-400 font-sans font-semibold">Required Environment Variables:</div>
-            <div className="flex items-center justify-between">
-              <span className="text-indigo-300">VITE_SUPABASE_URL</span>
-              <span className={diagnostic.config.hasSupabaseUrl ? 'text-emerald-400' : 'text-rose-400'}>
-                {diagnostic.config.hasSupabaseUrl ? '✓ Present' : '✗ Missing (e.g. https://your-project.supabase.co)'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between">
-              <span className="text-indigo-300">VITE_SUPABASE_PUBLISHABLE_KEY</span>
-              <span className={diagnostic.config.hasSupabaseKey ? 'text-emerald-400' : 'text-rose-400'}>
-                {diagnostic.config.hasSupabaseKey ? '✓ Present' : '✗ Missing (anon/publishable key)'}
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-slate-500">
-              <span>SUPABASE_SECRET_KEY (server-side only)</span>
-              <span>Protected in server environment</span>
-            </div>
-          </div>
-
-          <p className="text-xs text-slate-400 leading-relaxed">
-            Per architectural guidelines, the platform enforces authoritative cloud persistence and does not silently fall back to mock data. You can inspect the application using the <strong className="text-slate-200">Controlled Demo Persona</strong> while environment variables are provisioned.
-          </p>
-        </div>
-      )}
-
       {/* Hero Section */}
       <div className="text-center space-y-6 max-w-3xl mx-auto pt-4">
         <div className="inline-flex items-center space-x-2 px-3 py-1 rounded-full bg-indigo-500/10 border border-indigo-500/20 text-indigo-300 text-xs font-medium">

@@ -65,23 +65,6 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAskSaathi }) => {
 
             {/* Quick Context & Actions */}
             <div className="flex items-center space-x-2 sm:space-x-3">
-              {/* Database / Cloud Status Badge */}
-              <div
-                className={`hidden xl:flex items-center space-x-1.5 px-2.5 py-1 rounded-lg text-[11px] font-medium border ${
-                  isSupabaseConnected
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
-                    : 'bg-amber-500/10 text-amber-300 border-amber-500/30'
-                }`}
-                title={
-                  isSupabaseConnected
-                    ? 'Connected to Supabase PostgreSQL & Auth'
-                    : 'Awaiting VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY'
-                }
-              >
-                <Database className="w-3 h-3" />
-                <span>{isSupabaseConnected ? 'Supabase Sync' : 'Cloud Config Pending'}</span>
-              </div>
-
               {/* Mode Banner / Indicator */}
               {isDemoMode ? (
                 <div className="flex items-center space-x-1.5 bg-amber-500/10 border border-amber-500/30 px-2.5 py-1 rounded-lg text-xs">

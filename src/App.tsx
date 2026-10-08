@@ -17,8 +17,6 @@ import { ReportCenterView } from './components/crossproduct/ReportCenterView';
 import { AskCareerSaathiDrawer } from './components/crossproduct/AskCareerSaathiDrawer';
 import { RAGKnowledgeBaseView } from './components/crossproduct/RAGKnowledgeBaseView';
 import { AuthLandingView } from './components/auth/AuthLandingView';
-import { StudentOnboarding } from './components/onboarding/StudentOnboarding';
-import { DatabaseSchemaBanner } from './components/common/DatabaseSchemaBanner';
 import { Loader2, Shield } from 'lucide-react';
 
 function WorkspaceLayout() {
@@ -62,9 +60,6 @@ function WorkspaceLayout() {
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
       {/* Top Header */}
       <Header onOpenAskSaathi={() => setIsAskSaathiOpen(true)} />
-
-      {/* Schema Migration Helper Banner if tables pending in Supabase */}
-      <DatabaseSchemaBanner />
 
       {/* 9 Pillars & Cross-Product Navigation Bar */}
       <Navigation activeTab={activeTab} setActiveTab={setActiveTab} />
@@ -117,34 +112,20 @@ function RootApp() {
     return (
       <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
         <Header onOpenAskSaathi={() => {}} />
-        <DatabaseSchemaBanner />
         <main className="flex-1">
           <AuthLandingView />
         </main>
         <footer className="border-t border-slate-900 bg-slate-950/80 py-4 text-center text-[11px] text-slate-500">
           <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
             <span>Career Saathi AI • Persistent Personal Career Intelligence Platform</span>
-            <span>Supabase Auth & PostgreSQL Foundation</span>
+            <span>Deterministic Intelligence Engine</span>
           </div>
         </footer>
       </div>
     );
   }
 
-  // 3. Authenticated but Onboarding Incomplete
-  if (!isDemoMode && authState.status === 'authenticated' && profile.onboardingCompleted === false) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col font-sans selection:bg-indigo-500 selection:text-white">
-        <Header onOpenAskSaathi={() => {}} />
-        <DatabaseSchemaBanner />
-        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-          <StudentOnboarding />
-        </main>
-      </div>
-    );
-  }
-
-  // 4. Authenticated & Onboarding Complete (or Demo Mode active)
+  // 3. Authenticated (or Demo Mode active)
   return <WorkspaceLayout />;
 }
 

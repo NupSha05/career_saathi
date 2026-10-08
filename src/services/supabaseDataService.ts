@@ -125,11 +125,45 @@ export async function fetchFullStudentProfile(userId: string): Promise<StudentPr
     // offline/network fallback
   }
 
+  const sanitizeProfile = (p: any): StudentProfile => {
+    if (!p.education) {
+      p.education = {
+        institution: p.college || '',
+        degree: 'B.Tech',
+        branch: 'Computer Science & Engineering',
+        totalSemesters: 8,
+        termsCompleted: 6,
+        currentSemester: 7,
+        degreeStatus: 'pursuing',
+        gradingSystem: 'cgpa',
+        selfReportedCGPA: 8.5,
+        verifiedCGPA: 8.5,
+        terms: [],
+      };
+    }
+    if (!Array.isArray(p.education.terms)) p.education.terms = [];
+    if (!Array.isArray(p.skills)) p.skills = [];
+    if (!Array.isArray(p.projects)) p.projects = [];
+    if (!Array.isArray(p.experiences)) p.experiences = [];
+    if (!Array.isArray(p.certifications)) p.certifications = [];
+    if (!p.preferences) {
+      p.preferences = {
+        targetRoles: ['Software Development Engineer', 'Full Stack Developer'],
+        targetLocations: ['Bengaluru', 'Hyderabad', 'Remote'],
+        preferredWorkType: 'Hybrid',
+        minAcceptableCTC: '₹12,00,000',
+        targetIndustry: ['Technology'],
+      };
+    }
+    p.onboardingCompleted = true;
+    return p as StudentProfile;
+  };
+
   let supabase;
   try {
     supabase = requireClient();
   } catch {
-    return localCachedProfile;
+    return localCachedProfile ? sanitizeProfile(localCachedProfile) : null;
   }
 
   // 1b. Fetch student_profiles from Supabase if connected
@@ -1225,7 +1259,7 @@ export async function fetchEmailLogsFromDb(userId: string): Promise<EmailLogEntr
       id: e.id,
       timestamp: e.timestamp,
       recipient: e.recipient,
-      recipientRole: e.recipient_role || 'Academic Advisor / Mentor',
+      recipientRole: e.recipient_role || undefined,
       reportTitle: e.report_title,
       subject: e.subject || '',
       status: (e.status as any) || 'AUDIT_LOGGED',

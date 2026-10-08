@@ -258,22 +258,51 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
   }, [readiness, isDemoMode, profile.name, currentAuthUser?.id, profile.id]);
 
-  // Load authenticated student data from Supabase or persistent local store
+  // Load authenticated student data from database or persistent store
   const loadUserDataFromSupabase = useCallback(async (userId: string, userEmail: string, userName?: string) => {
     try {
       setAuthLoading(true);
-      const studentProfile = await dbService.fetchFullStudentProfile(userId);
+      let studentProfile = await dbService.fetchFullStudentProfile(userId);
 
       if (studentProfile) {
+        // Ensure student name and email are populated
+        if (!studentProfile.name && userName) studentProfile.name = userName;
+        if (!studentProfile.email && userEmail) studentProfile.email = userEmail;
+        if (!Array.isArray(studentProfile.education?.terms)) {
+          if (!studentProfile.education) (studentProfile as any).education = {};
+          studentProfile.education.terms = [];
+        }
+        if (!Array.isArray(studentProfile.skills)) studentProfile.skills = [];
+        if (!Array.isArray(studentProfile.projects)) studentProfile.projects = [];
+        if (!Array.isArray(studentProfile.experiences)) studentProfile.experiences = [];
+        if (!Array.isArray(studentProfile.certifications)) studentProfile.certifications = [];
+        studentProfile.onboardingCompleted = true;
         setProfile(studentProfile);
       } else {
-        // First-time user profile initialization
-        const blank = createBlankProductionProfile();
-        blank.id = userId;
-        blank.email = userEmail;
-        blank.name = userName || userEmail.split('@')[0];
-        setProfile(blank);
-        await dbService.upsertStudentProfile(userId, blank);
+        // Fallback to local storage or server profile cache
+        const localKey = `careersaathi_profile_${userId}`;
+        const cachedRaw = localStorage.getItem(localKey);
+        if (cachedRaw) {
+          try {
+            const cached = JSON.parse(cachedRaw);
+            if (cached) {
+              cached.onboardingCompleted = true;
+              studentProfile = cached;
+              setProfile(cached);
+            }
+          } catch {}
+        }
+
+        if (!studentProfile) {
+          // Initialize complete base profile from user credentials
+          const base = createBlankProductionProfile(userId);
+          base.id = userId;
+          base.email = userEmail;
+          base.name = userName || userEmail.split('@')[0] || 'Student';
+          base.onboardingCompleted = true;
+          setProfile(base);
+          await dbService.upsertStudentProfile(userId, base);
+        }
       }
 
       // Fetch JDs
@@ -389,6 +418,7 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
       initialProfile.college = creds.college || '';
       initialProfile.education.institution = creds.college || '';
       initialProfile.education.branch = creds.branch || 'Computer Science & Engineering';
+      initialProfile.onboardingCompleted = true;
 
       setProfile(initialProfile);
       await dbService.upsertStudentProfile(user.id, initialProfile);
