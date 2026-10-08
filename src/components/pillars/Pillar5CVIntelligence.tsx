@@ -15,10 +15,52 @@ import {
 import { GapType } from '../../types';
 
 export const Pillar5CVIntelligence: React.FC = () => {
-  const { cvAnalysis, activeJD, profile, triggerCVAnalysis, isAiProcessing, aiError } = useCareerSaathi();
+  const {
+    cvAnalysis,
+    activeJD,
+    profile,
+    triggerCVAnalysis,
+    isAiProcessing,
+    aiError,
+    uploadDocument,
+    authState,
+  } = useCareerSaathi();
   const [selectedFilter, setSelectedFilter] = useState<GapType | 'All'>('All');
   const [customCvInput, setCustomCvInput] = useState('');
   const [showInputDrawer, setShowInputDrawer] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState<string | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadStatus(`Uploading ${file.name} to persistent storage...`);
+
+    try {
+      if (authState.status === 'authenticated') {
+        const uploadRes = await uploadDocument(file, 'cv_resume');
+        setUploadStatus(`Saved to storage: ${uploadRes?.fileName || file.name}`);
+      } else {
+        setUploadStatus(`Parsed local file: ${file.name}`);
+      }
+
+      // Read text if text-readable
+      const text = await file.text();
+      if (text && text.trim().length > 20) {
+        setCustomCvInput(text);
+        await triggerCVAnalysis(text);
+      } else {
+        await triggerCVAnalysis();
+      }
+    } catch (err: any) {
+      setUploadStatus(`Upload notice: ${err.message || 'Stored locally for review'}`);
+      await triggerCVAnalysis();
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const filteredGaps =
     cvAnalysis && cvAnalysis.gaps
@@ -78,6 +120,17 @@ export const Pillar5CVIntelligence: React.FC = () => {
             <span className="text-xs bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-3 py-1.5 rounded-xl font-bold">
               Target JD: {activeJD ? activeJD.company : 'None Selected'}
             </span>
+            <label className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-1.5">
+              <Upload className="w-3.5 h-3.5 text-indigo-400" />
+              <span>{isUploading ? 'Uploading...' : 'Upload File'}</span>
+              <input
+                type="file"
+                accept=".pdf,.docx,.txt,.md"
+                onChange={handleFileUpload}
+                disabled={isUploading}
+                className="hidden"
+              />
+            </label>
             <button
               onClick={() => setShowInputDrawer(!showInputDrawer)}
               className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-1.5 rounded-xl text-xs font-semibold transition cursor-pointer"
@@ -86,7 +139,7 @@ export const Pillar5CVIntelligence: React.FC = () => {
             </button>
             <button
               onClick={handleRunAnalysis}
-              disabled={isAiProcessing}
+              disabled={isAiProcessing || isUploading}
               className="bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white px-3.5 py-1.5 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/30 transition cursor-pointer flex items-center gap-1.5"
             >
               <Sparkles className="w-3.5 h-3.5" />
@@ -94,6 +147,13 @@ export const Pillar5CVIntelligence: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {uploadStatus && (
+          <div className="mt-3 p-2.5 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-xs text-indigo-300 flex items-center gap-2">
+            <CheckCircle2 className="w-3.5 h-3.5 text-indigo-400 shrink-0" />
+            <span>{uploadStatus}</span>
+          </div>
+        )}
 
         {/* Custom CV Input Drawer */}
         {showInputDrawer && (

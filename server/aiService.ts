@@ -135,14 +135,17 @@ ${historyText}`,
     // Deterministic Rule-Based Fallback
     let fallbackAnswer = '';
     if (qLower.includes('cgpa') || qLower.includes('academic') || qLower.includes('eligib')) {
-      const cgpa = studentContext?.academics?.currentCGPA || '8.40';
-      fallbackAnswer = `Based on your verified academic records in Career Saathi, your current CGPA is ${cgpa} with zero active backlogs across completed semesters. Under deterministic campus eligibility rules, you comfortably satisfy the minimum cutoff (>= 7.50) for ${currentJD?.company || 'tier-1 tech roles'}. However, remember that academic cutoffs are strictly gatekeeper criteria—passing the cutoff secures test eligibility, while selection depends on technical problem solving.`;
+      const cgpa = studentContext?.academics?.currentCGPA ? Number(studentContext.academics.currentCGPA).toFixed(2) : 'N/A';
+      const cutoff = currentJD?.cgpaCutoff || 7.0;
+      fallbackAnswer = `Based on your academic records in Career Saathi, your current recorded CGPA is ${cgpa}. Under deterministic campus eligibility rules, evaluate this directly against the cutoff (>= ${cutoff}) for ${currentJD?.company || 'target opportunities'}. Remember that academic cutoffs are strictly gatekeeper criteria—passing the cutoff secures test eligibility, while selection depends on demonstrated problem solving and interview performance.`;
     } else if (qLower.includes('fit') || qLower.includes('match') || qLower.includes('score')) {
-      fallbackAnswer = `Evaluating your profile against ${currentJD?.company || 'your target opportunity'}: You demonstrate strong Level 3 evidence in TypeScript, React, and PostgreSQL through your internship at HyperGrowth Labs. The primary limiting factor is an Evidence Gap in cloud containerization (AWS/Docker) which is required for high-scale roles. Remedying this will upgrade your Role Fit from Conditional to Strong Match.`;
+      const skillsCount = studentContext?.skills?.length || 0;
+      fallbackAnswer = `Evaluating your profile against ${currentJD?.company || 'your target opportunity'}: You currently have ${skillsCount} registered capability records. Target roles require demonstrated evidence (Level 2+ projects or Level 3+ industry proof). Review the Three-Way Gaps in Pillar 5 to ensure all verified competencies are articulated on your CV without unbacked claims.`;
     } else if (qLower.includes('guarantee') || qLower.includes('will i get selected') || qLower.includes('hired')) {
-      fallbackAnswer = `Career Saathi AI does not provide unsupported certainty or guarantees of employment outcomes. Hiring decisions involve dynamic candidate competition, interview panel preferences, and company headcount. However, with your 8.40 verified CGPA and solid full-stack fundamentals, closing your system design gap and practicing structured STAR responses will maximize your real-world competitiveness.`;
+      fallbackAnswer = `Career Saathi AI does not provide unsupported certainty or guarantees of employment outcomes. Hiring decisions involve dynamic candidate competition, interview panel requirements, and company quotas. Focus on closing verified skill gaps, validating project evidence, and practicing structured STAR responses to maximize your real-world competitiveness.`;
     } else {
-      fallbackAnswer = `Hello! Based on your persistent Career Saathi context, your overall Career Readiness Index is currently ${studentContext?.readiness?.overall || 76}/100. All 9 pillars are active and synchronized. How would you like to proceed—exploring your target JD requirements, reviewing your CV gaps, or practicing behavioral questions?`;
+      const score = studentContext?.readiness?.overall ?? 'N/A';
+      fallbackAnswer = `Hello! Based on your active Career Saathi state, your Career Readiness Index is currently ${score}/100. All 9 pillars are active and synchronized. How would you like to proceed—exploring your target JD requirements, reviewing your CV gaps, or practicing behavioral questions?`;
     }
 
     return {
@@ -196,27 +199,28 @@ Return ONLY pure JSON. No markdown backticks, no preamble.`,
     }
 
     // Deterministic Fallback Parser
+    const titleMatch = jdText.match(/(?:role|title|position|hiring for)\s*[:\-]?\s*([A-Za-z0-9\s\(\)\-\/]{3,50})/i);
+    const companyMatch = jdText.match(/(?:at|company:|about)\s+([A-Z][A-Za-z0-9\s&]{2,30})/i);
     return {
-      company: jdText.match(/(?:at|company:|about)\s+([A-Z][A-Za-z0-9\s&]{2,30})/i)?.[1]?.trim() || 'Tech Innovators Corp',
-      title: jdText.match(/(?:software engineer|full stack developer|frontend engineer|data analyst|backend engineer)/i)?.[0] || 'Software Development Engineer (SDE-1)',
+      company: companyMatch?.[1]?.trim() || 'Target Organization',
+      title: titleMatch?.[1]?.trim() || 'Software Engineer',
       function: 'Engineering & Technology',
-      location: 'Bengaluru / Hybrid',
-      workArrangement: 'Hybrid',
-      experienceRange: '0 - 2 Years (Freshers Eligible)',
-      educationRequirement: 'B.Tech / B.E. in CSE, IT or allied discipline',
-      cgpaCutoff: 7.5,
+      location: 'Flexible / Hybrid',
+      workArrangement: 'Hybrid' as const,
+      experienceRange: '0 - 2 Years',
+      educationRequirement: 'Bachelor degree in relevant engineering or technical discipline',
+      cgpaCutoff: 7.0,
       maxBacklogs: 0,
-      salaryRange: '₹14 - ₹18 LPA CTC',
-      mustHaveSkills: ['Data Structures & Algorithms', 'TypeScript & JavaScript', 'React.js', 'Node.js / Express', 'SQL & PostgreSQL'],
-      preferredSkills: ['System Design Basics', 'Docker & Containerization', 'Cloud Infrastructure (AWS/GCP)'],
-      goodToHaveSkills: ['GraphQL', 'Redis Caching', 'CI/CD Pipelines'],
+      salaryRange: 'Competitive CTC',
+      mustHaveSkills: ['Problem Solving & DSA', 'Core Programming Language', 'Relational Databases'],
+      preferredSkills: ['System Design Fundamentals', 'Containerization / Cloud Basics'],
+      goodToHaveSkills: ['Version Control (Git)', 'Automated Testing'],
       keyResponsibilities: [
-        'Design, build, and deploy reliable web services and user interfaces',
-        'Collaborate across sprints with engineers, designers, and product managers',
+        'Design, build, and deploy reliable software modules and services.',
+        'Collaborate across cross-functional teams and participate in code reviews.',
       ],
       ambiguousOrUncertainTerms: [
-        'Notice period requirement not explicitly stated for fresher cohort',
-        'Conditional wording regarding cloud certification preference',
+        'Experience and qualification equivalents subject to recruiter discretion.',
       ],
     };
   },
@@ -374,50 +378,44 @@ Return ONLY pure JSON.`,
     }
 
     // Deterministic Fallback
+    const projects = profile?.projects || [];
+    const experiences = profile?.experiences || [];
+    const skills = profile?.skills || [];
+    const targetComp = activeJD?.company || 'Target Organization';
+
     return {
-      completenessScore: 82,
-      quantifiedAchievementsRatio: 0.65,
-      activeVoiceRatio: 0.88,
-      targetJDAlignmentScore: 78,
+      completenessScore: projects.length > 0 || experiences.length > 0 ? 75 : 40,
+      quantifiedAchievementsRatio: 0.5,
+      activeVoiceRatio: 0.7,
+      targetJDAlignmentScore: skills.length > 0 ? 68 : 35,
       gaps: [
         {
           id: `cvgap-${Date.now()}-1`,
-          skillOrCapability: 'API Latency Optimization Metric',
-          gapType: 'CV Gap',
-          description: 'Profile documents 38% API latency reduction with pg_stat_statements, but current CV draft omits the exact metric.',
-          evidenceSource: 'HyperGrowth Labs Internship Record',
-          suggestedAction: 'Update bullet in CV: "Reduced Postgres query latency by 38% via composite index tuning".',
+          skillOrCapability: activeJD?.mustHaveSkills?.[0] || 'Core Technical Capability',
+          gapType: 'Profile Gap' as const,
+          description: `Target role at ${targetComp} emphasizes ${activeJD?.mustHaveSkills?.[0] || 'core technical competencies'}, which should be prominently backed by repository code.`,
+          evidenceSource: 'Active Opportunity Requirements',
+          suggestedAction: 'Add a repository project or verifiable coursework link demonstrating this capability.',
         },
         {
           id: `cvgap-${Date.now()}-2`,
-          skillOrCapability: 'Cloud Infrastructure / AWS',
-          gapType: 'Evidence Gap',
-          description: 'CV claims "AWS Cloud Deployment", but profile only contains foundational coursework without a verified repository link.',
-          evidenceSource: 'AWS Certified Cloud Practitioner certificate',
-          suggestedAction: 'Deploy DevPulse project live on AWS/GCP and link public live demo URL.',
-        },
-        {
-          id: `cvgap-${Date.now()}-3`,
-          skillOrCapability: 'Distributed Consensus & Kafka',
-          gapType: 'Profile Gap',
-          description: 'Target role mentions message streaming architectures, which is currently unrepresented in candidate profile.',
-          evidenceSource: 'Active Opportunity Requirements',
-          suggestedAction: 'Build a small Kafka/RabbitMQ consumer demo or complete distributed systems module.',
+          skillOrCapability: 'Quantified Impact Metrics',
+          gapType: 'CV Gap' as const,
+          description: 'Experience and project descriptions are descriptive rather than impact-driven.',
+          evidenceSource: 'Document Analysis',
+          suggestedAction: 'Enhance resume bullet points with measurable outcomes (e.g., latency reduction, throughput, user count).',
         },
       ],
       bulletImprovements: [
         {
-          original: 'Worked on database queries and improved speed of user dashboard.',
-          improved: 'Optimized PostgreSQL queries via composite indexing, reducing dashboard API latency by 38% across 5,000+ daily active sessions.',
-          rationale: 'Replaces passive duty statement with action verb, technical methodology, and quantifiable metric.',
-        },
-        {
-          original: 'Helped build collaboration feature in web app.',
-          improved: 'Architected real-time WebSocket communication layer in DevPulse, supporting 250+ concurrent users with sub-50ms sync.',
-          rationale: 'Demonstrates ownership, architecture choice, scale, and concrete outcome.',
+          original: projects[0] ? `Worked on ${projects[0].title} project.` : 'Worked on software development project.',
+          improved: projects[0]
+            ? `Engineered ${projects[0].title} using ${(projects[0].techStack || ['modern stack']).join(', ')}, delivering responsive functionality with comprehensive test coverage.`
+            : 'Engineered web services module with structured API routing and end-to-end integration tests.',
+          rationale: 'Replaces passive duty statement with active ownership verb and concrete architectural stack.',
         },
       ],
-      suggestedKeywordsToAdd: ['PostgreSQL Indexing', 'WebSocket Synchronization', 'RESTful API Design', 'Jest / Unit Testing', 'Docker Containerization'],
+      suggestedKeywordsToAdd: activeJD?.mustHaveSkills?.slice(0, 4) || ['Data Structures', 'API Development', 'SQL Databases'],
     };
   },
 
@@ -462,44 +460,45 @@ Return ONLY pure JSON.`,
     }
 
     // Deterministic Fallback
+    const targetTitle = activeJD?.title || 'Software Engineer';
+    const topSkills = profile?.skills?.slice(0, 3).map((s: any) => s.name).join(', ') || 'Software Development';
+
     return {
-      completenessScore: 74,
+      completenessScore: profile?.headline ? 70 : 40,
       headlineAudit: {
-        current: profile.headline || 'Final Year B.Tech CSE Student at NITK | Aspiring Techie',
-        suggested: 'Software Engineer (Incoming) | TypeScript, React & Distributed Systems | Ex-Intern @ HyperGrowth Labs',
-        rationale: 'Recruiters search by target job title and core tech stack rather than generic student status.',
+        current: profile?.headline || 'Student / Early Career Professional',
+        suggested: `${targetTitle} Aspirant | ${topSkills} | ${profile?.education?.degree || 'Engineering'} '${profile?.education?.expectedGraduationYear || '2026'}`,
+        rationale: 'Recruiters search by target job role and specific technology keywords rather than generic titles.',
       },
       aboutSummaryAudit: {
-        current: profile.about || 'I am a final year computer science student interested in technology and looking for opportunities.',
-        suggested:
-          'Final year CS engineer focused on high-throughput backend services and modern TypeScript web apps. Built DevPulse (real-time editor for 250+ users) and improved DB response times by 38% at HyperGrowth Labs. Open to Software Engineering roles starting 2026.',
-        rationale: 'Concisely leads with proven results, flagship projects, and availability timeline.',
+        current: profile?.about || 'Student interested in technology and seeking job opportunities.',
+        suggested: `Aspiring ${targetTitle} with foundational competence in ${topSkills}. Dedicated to clean architecture and verifiable project delivery. Actively seeking early-career opportunities.`,
+        rationale: 'Clearly communicates technical trajectory, demonstrated competencies, and concrete availability.',
       },
-      visibilityGaps: [
+      visibilityGaps: profile?.skills && profile.skills.length > 0 ? profile.skills.slice(0, 2).map((s: any) => ({
+        skill: s.name,
+        reason: 'Skill is recorded in internal evidence profile but may not be featured prominently in top LinkedIn skills.',
+        action: `Add "${s.name}" to top pinned skills and link relevant project repository.`,
+      })) : [
         {
-          skill: 'PostgreSQL & Query Tuning',
-          reason: 'Student has proven internship impact, but skill is buried below Fold 3 on LinkedIn profile.',
-          action: 'Pin HyperGrowth Labs internship with highlighted media link and add SQL to Top 5 Skills.',
-        },
-        {
-          skill: 'In-Memory Store (Go)',
-          reason: 'Flagship systems project is completely absent from LinkedIn Featured section.',
-          action: 'Add GitHub link to Featured media card with benchmark stats (45k QPS).',
+          skill: 'Primary Technical Competency',
+          reason: 'Verified capabilities should be featured in top 3 LinkedIn skills.',
+          action: 'Pin primary technical competencies to profile summary.',
         },
       ],
       genuineSkillGaps: [
         {
-          skill: 'Production Kubernetes / Orchestration',
-          reason: 'Demanded by 40% of tech job descriptions in target bracket; candidate currently has basic Docker Compose only.',
-          action: 'Undertake hands-on Minikube/K8s deployment exercise before applying to high-scale roles.',
+          skill: activeJD?.preferredSkills?.[0] || 'Cloud & Deployment Basics',
+          reason: 'Frequently demanded in target job specifications; recommend adding verifiable project evidence.',
+          action: 'Complete and deploy a live demonstration project.',
         },
       ],
       sectionChecklist: [
-        { section: 'Headline', status: 'Needs Attention', note: 'Missing target job title and core tech keywords' },
-        { section: 'About Summary', status: 'Needs Attention', note: 'Too generic; needs quantified accomplishments' },
-        { section: 'Featured Media', status: 'Missing', note: 'No projects or GitHub repositories pinned' },
-        { section: 'Experience', status: 'Optimized', note: 'Internship details and outcomes clearly articulated' },
-        { section: 'Skills & Endorsements', status: 'Optimized', note: 'Top 5 skills aligned with software engineering' },
+        { section: 'Headline', status: profile?.headline ? ('Optimized' as const) : ('Needs Attention' as const), note: profile?.headline ? 'Headline is configured' : 'Add role and technical focus' },
+        { section: 'About Summary', status: profile?.about ? ('Optimized' as const) : ('Needs Attention' as const), note: profile?.about ? 'Summary provides context' : 'Draft a concise impact summary' },
+        { section: 'Featured Media', status: profile?.portfolioUrl || profile?.githubUrl ? ('Optimized' as const) : ('Missing' as const), note: profile?.githubUrl ? 'GitHub linked' : 'No repository or portfolio pinned' },
+        { section: 'Experience', status: profile?.experiences?.length > 0 ? ('Optimized' as const) : ('Needs Attention' as const), note: `${profile?.experiences?.length || 0} experience record(s)` },
+        { section: 'Skills & Endorsements', status: profile?.skills?.length > 0 ? ('Optimized' as const) : ('Needs Attention' as const), note: `${profile?.skills?.length || 0} skill(s) registered` },
       ],
     };
   },

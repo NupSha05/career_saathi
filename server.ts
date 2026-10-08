@@ -10,6 +10,12 @@ import {
   getRAGDocument,
   searchRAGKnowledgeBase,
 } from './server/ragKnowledgeBase.js';
+import fs from 'fs';
+import {
+  isServerSupabaseConfigured,
+  ensureStorageBucketExists,
+  checkDatabaseSchemaStatus,
+} from './server/supabaseServer.js';
 
 dotenv.config();
 
@@ -117,7 +123,7 @@ const emailActivityLog: Array<{
   recipientRole: string;
   reportTitle: string;
   subject: string;
-  status: 'SENT' | 'FAILED' | 'PENDING_APPROVAL';
+  status: 'SENT' | 'FAILED' | 'PENDING_APPROVAL' | 'AUDIT_LOGGED';
   authenticatedSender: string;
 }> = [];
 
@@ -187,13 +193,55 @@ app.get('/api/health', (_req: Request, res: Response) => {
     status: 'ok',
     service: 'Career Saathi AI Centralized Intelligence Service',
     hasApiKey: !!process.env.GEMINI_API_KEY && process.env.GEMINI_API_KEY !== 'MY_GEMINI_API_KEY',
+    supabaseConnected: isServerSupabaseConfigured(),
     version: '1.0.0',
     mode: process.env.NODE_ENV || 'development',
   });
 });
 
+app.get('/api/supabase/status', (_req: Request, res: Response) => {
+  return res.json({
+    configured: isServerSupabaseConfigured(),
+    hasServerUrl: Boolean(process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL),
+    hasServerSecretKey: Boolean(process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY),
+    provider: 'Supabase PostgreSQL + Storage + Auth',
+  });
+});
+
+app.get('/api/supabase/migration-sql', (_req: Request, res: Response) => {
+  try {
+    const migrationPath = path.resolve(__dirname, 'supabase', 'migrations', '20261008000001_initial_career_saathi_schema.sql');
+    if (fs.existsSync(migrationPath)) {
+      const sql = fs.readFileSync(migrationPath, 'utf8');
+      return res.json({ success: true, sql, fileName: '20261008000001_initial_career_saathi_schema.sql' });
+    }
+    return res.status(404).json({ error: 'Migration file not found' });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to read migration SQL', message: err.message });
+  }
+});
+
+app.get('/api/supabase/schema-status', async (_req: Request, res: Response) => {
+  try {
+    const bucketStatus = await ensureStorageBucketExists();
+    const schemaStatus = await checkDatabaseSchemaStatus();
+    return res.json({
+      configured: isServerSupabaseConfigured(),
+      bucket: bucketStatus,
+      schema: schemaStatus,
+      supabaseUrl: process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL,
+    });
+  } catch (err: any) {
+    return res.status(500).json({ error: 'Failed to check schema status', message: err.message });
+  }
+});
+
 // Setup Vite middleware in dev or static files in production
 async function startServer() {
+  // Ensure storage bucket is initialized
+  ensureStorageBucketExists().then((res) => {
+    console.log(`[Storage] Init check: ${res.message}`);
+  }).catch(() => {});
   const isProd = process.env.NODE_ENV === 'production';
   const httpServer = http.createServer(app);
 

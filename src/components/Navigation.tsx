@@ -48,7 +48,7 @@ export const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab 
     { id: 'pillar-8-practice' as TabType, label: '8. Practice Coach', icon: MessageSquareCode, subtitle: 'STAR Rubrics' },
     { id: 'pillar-9-readiness' as TabType, label: '9. Readiness Intel', icon: LineChart, subtitle: 'Event Impact' },
     { id: 'action-center' as TabType, label: 'Action Center', icon: CheckSquare, badge: 'Prioritized' },
-    { id: 'report-center' as TabType, label: 'Reports & Gmail', icon: FileDown, subtitle: 'PDF & Authorized' },
+    { id: 'report-center' as TabType, label: 'Reports & Export', icon: FileDown, subtitle: 'Dossier & Audit' },
     { id: 'rag-knowledge-base' as TabType, label: 'RAG Knowledge Base', icon: BookOpen, badge: 'System B' },
   ];
 

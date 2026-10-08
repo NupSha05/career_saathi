@@ -123,6 +123,7 @@ export interface StudentProfile {
   headline: string;
   about: string;
   careerStage: 'Final Year Student' | 'Pre-final Year' | 'Fresh Graduate' | 'Early-Career Professional';
+  onboardingCompleted?: boolean;
   linkedInUrl: string;
   githubUrl: string;
   portfolioUrl: string;

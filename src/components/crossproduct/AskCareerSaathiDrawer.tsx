@@ -25,10 +25,10 @@ interface Message {
 }
 
 const QUICK_QUESTIONS = [
-  'Why is my role fit score 78% for Tech Innovators Corp?',
-  'Am I eligible for the FinTech Global Systems Trainee position?',
-  'Which skill should I prioritize to increase my Readiness Index above 85?',
-  'What are the critical gaps between my CV and LinkedIn profile?',
+  'How is my role fit score calculated for my target opportunity?',
+  'Am I eligible under deterministic academic criteria?',
+  'Which skill gap should I prioritize to increase my Readiness Index?',
+  'What are the critical three-way gaps between my profile, CV, and target JD?',
   'Will I definitely get selected for campus placement?', // Critical thinking test: refusal of unsupported certainty
   'Why did my readiness score change recently?',
 ];
@@ -37,10 +37,12 @@ export const AskCareerSaathiDrawer: React.FC<AskCareerSaathiDrawerProps> = ({ is
   const { profile, activeJD, readiness, currentFitReport, cvAnalysis, linkedInAnalysis } = useCareerSaathi();
 
   const [input, setInput] = useState('');
-  const [messages, setMessages] = useState<Message[]>([
+  const [messages, setMessages] = useState<Message[]>(() => [
     {
       role: 'assistant',
-      text: `Hello ${profile.name.split(' ')[0]}! I am Career Saathi AI. I have full context of your verified academic records (8.40 CGPA), your internship at HyperGrowth Labs, your projects, and your target opportunity (${activeJD.company}). How can I assist your career preparation today?`,
+      text: profile.name
+        ? `Hello ${profile.name.split(' ')[0]}! I am Career Saathi AI. I have context of your academic records, registered projects, and target opportunity (${activeJD?.company || 'None selected'}). How can I assist your career preparation today?`
+        : `Hello! I am Career Saathi AI. I have context of your active target opportunity (${activeJD?.company || 'None selected'}) and evidence repository. How can I assist your career preparation today?`,
     },
   ]);
   const [isLoading, setIsLoading] = useState(false);
@@ -79,8 +81,8 @@ export const AskCareerSaathiDrawer: React.FC<AskCareerSaathiDrawerProps> = ({ is
           opportunity: readiness.opportunityReadiness,
           interview: readiness.interviewReadiness,
         },
-        cvGaps: cvAnalysis.gaps.map((g) => ({ skill: g.skillOrCapability, type: g.gapType })),
-        linkedInVisibilityGaps: linkedInAnalysis.visibilityGaps,
+        cvGaps: cvAnalysis?.gaps ? cvAnalysis.gaps.map((g) => ({ skill: g.skillOrCapability, type: g.gapType })) : [],
+        linkedInVisibilityGaps: linkedInAnalysis?.visibilityGaps || [],
       };
 
       const res = await fetch('/api/ai/ask', {

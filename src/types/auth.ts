@@ -6,8 +6,9 @@ export interface AuthUser {
   email: string;
   name: string;
   role: 'student' | 'job_seeker';
-  authProvider: 'local' | 'google' | 'guest';
+  authProvider: 'supabase' | 'local' | 'guest';
   createdAt: string;
+  lastSignInAt?: string;
 }
 
 export interface AuthState {
@@ -15,4 +16,15 @@ export interface AuthState {
   user: AuthUser | null;
   mode: 'production' | 'demo';
   sessionToken?: string;
+  isSupabaseConnected: boolean;
+  error?: string | null;
+}
+
+export interface AuthCredentials {
+  email: string;
+  password: string;
+  fullName?: string;
+  college?: string;
+  branch?: string;
+  role?: 'student' | 'job_seeker';
 }

@@ -24,16 +24,17 @@ export const ReportCenterView: React.FC = () => {
     cvAnalysis,
     emailLogs,
     logEmailDispatch,
+    actions,
   } = useCareerSaathi();
 
   const [selectedReportType, setSelectedReportType] = useState<string>('Career Readiness Diagnostic');
   const [recipientEmail, setRecipientEmail] = useState<string>('placement.office@campus.edu');
   const [recipientRole, setRecipientRole] = useState<string>('Campus Placement Officer');
   const [customSubject, setCustomSubject] = useState<string>(
-    `Career Saathi Readiness Dossier — ${profile.name} (${profile.education.branch})`
+    `Career Saathi Readiness Dossier — ${profile.name || 'Candidate'} (${profile.education.branch || 'Student'})`
   );
   const [customMessage, setCustomMessage] = useState<string>(
-    `Dear Placement Cell,\n\nPlease find attached my verified Career Saathi AI Readiness Diagnostic Report for 2026 campus drives. All CGPA calculations (8.40) and project repositories have been validated against our institutional curriculum.\n\nBest regards,\n${profile.name}`
+    `Dear Placement Cell,\n\nPlease find attached my Career Saathi AI Readiness Diagnostic Report for campus placement drives. All academic and project repositories reflect my current evidence baseline.\n\nBest regards,\n${profile.name || 'Candidate'}`
   );
 
   const [isSending, setIsSending] = useState(false);
@@ -59,7 +60,7 @@ export const ReportCenterView: React.FC = () => {
           recipientRole,
           reportTitle: selectedReportType,
           customMessage,
-          studentName: profile.name,
+          studentName: profile.name || 'Candidate',
         }),
       });
 
@@ -74,16 +75,16 @@ export const ReportCenterView: React.FC = () => {
           recipientRole,
           reportTitle: selectedReportType,
           subject: customSubject,
-          status: 'SENT',
-          authenticatedSender: 'student@careersaathi.internal',
+          status: 'AUDIT_LOGGED',
+          authenticatedSender: profile.email || 'student@careersaathi.app',
         };
         logEmailDispatch(fallbackLog);
       }
 
-      setSendSuccessMessage(`Report PDF successfully dispatched to ${recipientEmail} via authorized Gmail integration.`);
+      setSendSuccessMessage(`Report generation and destination metadata recorded in audit register for ${recipientEmail}.`);
     } catch (err) {
       console.error(err);
-      setSendSuccessMessage('Failed to deliver email. Please try again.');
+      setSendSuccessMessage('Failed to record dispatch in audit register.');
     } finally {
       setIsSending(false);
     }
@@ -97,13 +98,13 @@ export const ReportCenterView: React.FC = () => {
           <div>
             <div className="flex items-center space-x-2 text-indigo-400 text-xs font-semibold uppercase tracking-wider mb-1">
               <FileDown className="w-4 h-4" />
-              <span>Cross-Product Layer • Report Center & Authorized Gmail</span>
+              <span>Cross-Product Layer • Report Center & Export Register</span>
             </div>
             <h1 className="text-xl sm:text-2xl font-bold text-white">
-              Verified Career Dossiers & Authorized Transmission
+              Career Dossiers & Audit Register
             </h1>
             <p className="text-xs text-slate-400 mt-1 max-w-2xl">
-              Reports compile authoritative data states with provenance metadata. Export high-fidelity PDFs or dispatch directly via authorized Gmail with strict audit logging.
+              Reports compile authoritative data states with provenance metadata. Export high-fidelity PDFs or log report transmissions in the audit register.
             </p>
           </div>
 
@@ -142,7 +143,7 @@ export const ReportCenterView: React.FC = () => {
         </div>
       </div>
 
-      {/* Main Grid: Live Printable Report Preview & Authorized Gmail Dispatch Panel */}
+      {/* Main Grid: Live Printable Report Preview & Export Dispatch Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Live Report Preview (A4 styled) */}
         <div className="lg:col-span-2 bg-white text-slate-900 rounded-2xl p-8 shadow-2xl border border-slate-200 font-sans print:m-0 print:p-0 print:border-none print:shadow-none">
@@ -156,7 +157,7 @@ export const ReportCenterView: React.FC = () => {
                 {selectedReportType}
               </h2>
               <p className="text-xs text-slate-600 mt-1 font-medium">
-                Candidate: <strong className="text-slate-900">{profile.name}</strong> • {profile.education.degree} ({profile.education.branch})
+                Candidate: <strong className="text-slate-900">{profile.name || 'Candidate Name'}</strong> • {profile.education.degree || 'Degree'} ({profile.education.branch || 'Discipline'})
               </p>
             </div>
             <div className="text-right">
@@ -167,7 +168,7 @@ export const ReportCenterView: React.FC = () => {
                 Generated: {new Date().toLocaleDateString()}
               </span>
               <span className="inline-block mt-1 text-[9px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-bold uppercase">
-                Verified Provenance
+                {profile.education.verificationStatus === 'verified' ? 'Verified Provenance' : 'Self-Reported Baseline'}
               </span>
             </div>
           </div>
@@ -177,12 +178,12 @@ export const ReportCenterView: React.FC = () => {
             <div>
               <span className="text-[10px] text-slate-500 uppercase font-bold block">Overall Readiness</span>
               <span className="text-2xl font-black text-indigo-700">{readiness.overallScore}/100</span>
-              <span className="text-[10px] text-emerald-700 font-medium block">Top Tier Trajectory</span>
+              <span className="text-[10px] text-emerald-700 font-medium block">Deterministic Index</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-500 uppercase font-bold block">Authoritative CGPA</span>
-              <span className="text-2xl font-black text-slate-900">{profile.education.verifiedCGPA || profile.education.selfReportedCGPA}</span>
-              <span className="text-[10px] text-slate-600 font-medium block">Zero Backlogs Verified</span>
+              <span className="text-2xl font-black text-slate-900">{(profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0).toFixed(2)}</span>
+              <span className="text-[10px] text-slate-600 font-medium block">{profile.education.terms?.length || 0} Terms Recorded</span>
             </div>
             <div>
               <span className="text-[10px] text-slate-500 uppercase font-bold block">Target Role Fit</span>
@@ -197,14 +198,18 @@ export const ReportCenterView: React.FC = () => {
               1. Academic & Evidence Profile Verification
             </h3>
             <p className="text-slate-700 leading-relaxed text-xs">
-              Candidate has completed 6 of 8 academic semesters at {profile.education.institution} with a credit-weighted CGPA of {profile.education.verifiedCGPA || profile.education.selfReportedCGPA}. Trajectory across recent terms demonstrates consistent upward momentum (+0.6 delta).
+              Candidate has completed {profile.education.terms?.length || 0} of {profile.education.totalSemesters || 8} academic semesters at {profile.education.institution || 'institution'} with a credit-weighted CGPA of {(profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0).toFixed(2)}.
             </p>
             <div className="flex flex-wrap gap-2 pt-1">
-              {profile.skills.slice(0, 6).map((sk) => (
-                <span key={sk.id} className="bg-slate-100 border border-slate-300 px-2 py-1 rounded text-[11px] font-medium text-slate-800">
-                  {sk.name} (Level {sk.evidenceLevel} Evidence)
-                </span>
-              ))}
+              {profile.skills.length > 0 ? (
+                profile.skills.slice(0, 6).map((sk) => (
+                  <span key={sk.id} className="bg-slate-100 border border-slate-300 px-2 py-1 rounded text-[11px] font-medium text-slate-800">
+                    {sk.name} (Level {sk.evidenceLevel} Evidence)
+                  </span>
+                ))
+              ) : (
+                <span className="text-slate-500 italic text-[11px]">No skills registered yet.</span>
+              )}
             </div>
           </div>
 
@@ -217,7 +222,9 @@ export const ReportCenterView: React.FC = () => {
               <div className="flex justify-between font-semibold">
                 <span>Deterministic Academic Cutoff Gate:</span>
                 <span className={currentFitReport.eligibilityPassed ? 'text-emerald-700' : 'text-rose-700'}>
-                  {currentFitReport.eligibilityPassed ? '✓ Passed (8.40 >= 7.50)' : '✗ Blocked'}
+                  {currentFitReport.eligibilityPassed
+                    ? `✓ Passed (${(profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0).toFixed(2)} >= ${activeJD.cgpaCutoff})`
+                    : `✗ Below Cutoff (${(profile.education.verifiedCGPA || profile.education.selfReportedCGPA || 0).toFixed(2)} < ${activeJD.cgpaCutoff})`}
                 </span>
               </div>
               <p className="text-slate-600 text-[11px]">
@@ -231,32 +238,38 @@ export const ReportCenterView: React.FC = () => {
             <h3 className="text-xs uppercase font-bold tracking-wider text-slate-900 border-b border-slate-200 pb-1">
               3. Prioritized Strategic Milestones
             </h3>
-            <ul className="list-disc list-inside space-y-1 text-slate-700 text-xs">
-              <li>Deploy containerized distributed services project to convert Cloud theory into Level 3 evidence.</li>
-              <li>Reconcile CV bullets with quantified metric achievements identified in internship records.</li>
-              <li>Practice 2 case interview rounds to elevate Interview Readiness beyond 85%.</li>
-            </ul>
+            {actions.length > 0 ? (
+              <ul className="list-disc list-inside space-y-1 text-slate-700 text-xs">
+                {actions.slice(0, 3).map((act) => (
+                  <li key={act.id}>
+                    <strong>{act.title}:</strong> {act.description}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-slate-600 italic">Core requirements documented. Continue targeted interview practice and skill depth.</p>
+            )}
           </div>
 
           {/* Signoff Footer */}
           <div className="mt-8 pt-4 border-t border-slate-300 text-[10px] text-slate-500 flex justify-between items-center">
-            <span>Career Saathi AI Platform • Verified Analytical Audit</span>
-            <span>Document Hash: {Math.random().toString(36).substring(2, 10).toUpperCase()}</span>
+            <span>Career Saathi AI Platform • Analytical Dossier</span>
+            <span>Document ID: CS-{profile.id.toUpperCase()}</span>
           </div>
         </div>
 
-        {/* Right Col: Authorized Gmail Workflow Form & Activity Log */}
+        {/* Right Col: Export Transmission & Audit Register */}
         <div className="space-y-6">
           {/* Dispatch Panel */}
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-lg">
             <div className="flex items-center gap-2 mb-3">
               <Mail className="w-4 h-4 text-indigo-400" />
               <h2 className="text-xs font-bold text-slate-300 uppercase tracking-wider">
-                Authorized Gmail Report Transmission
+                Report Transmission & Export Audit
               </h2>
             </div>
             <p className="text-xs text-slate-400 mb-4 leading-relaxed">
-              In strict adherence to Blueprint Section 12.5: Never stores Gmail passwords. Transmits with user consent and logs metadata.
+              Maintains an immutable local audit register of exported dossiers and intended distribution targets.
             </p>
 
             {sendSuccessMessage && (
@@ -325,7 +338,7 @@ export const ReportCenterView: React.FC = () => {
                 className="w-full py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-semibold shadow-lg shadow-indigo-600/30 transition cursor-pointer flex items-center justify-center gap-2 text-xs"
               >
                 <Send className="w-3.5 h-3.5" />
-                <span>{isSending ? 'Sending via Gmail...' : 'Send Verified Report'}</span>
+                <span>{isSending ? 'Recording Export...' : 'Record Export in Audit Register'}</span>
               </button>
             </form>
           </div>

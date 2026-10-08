@@ -359,7 +359,7 @@ export const Pillar4OpportunityJD: React.FC = () => {
               <div className="flex justify-between items-center text-xs">
                 <button
                   type="button"
-                  onClick={() => setJdPasteText(PRESET_JDS[0].rawText || '')}
+                  onClick={() => setJdPasteText(allJDs[0]?.rawText || '')}
                   className="text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
                 >
                   Load sample JD text

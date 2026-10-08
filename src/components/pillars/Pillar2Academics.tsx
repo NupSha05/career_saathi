@@ -14,16 +14,20 @@ import {
   Scale,
   Edit2,
   FileCheck,
+  UploadCloud,
+  Loader2,
 } from 'lucide-react';
 import { AcademicTerm } from '../../types';
 
 export const Pillar2Academics: React.FC = () => {
-  const { profile, updateEducation, reconcileDiscrepancy } = useCareerSaathi();
+  const { profile, updateEducation, reconcileDiscrepancy, uploadDocument } = useCareerSaathi();
 
   const [targetCGPAInput, setTargetCGPAInput] = useState<number>(8.5);
   const [useCreditWeighted, setUseCreditWeighted] = useState(true);
   const [showAddTermModal, setShowAddTermModal] = useState(false);
   const [showDegreeConfigModal, setShowDegreeConfigModal] = useState(false);
+  const [isUploadingMarksheet, setIsUploadingMarksheet] = useState(false);
+  const [uploadNotice, setUploadNotice] = useState<string | null>(null);
 
   // New term form state
   const nextTermNumber = (profile.education.terms?.length || 0) + 1;
@@ -109,6 +113,34 @@ export const Pillar2Academics: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <label className="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs font-medium transition cursor-pointer flex items-center gap-1.5">
+              {isUploadingMarksheet ? (
+                <Loader2 className="w-3.5 h-3.5 animate-spin text-indigo-400" />
+              ) : (
+                <UploadCloud className="w-3.5 h-3.5 text-indigo-400" />
+              )}
+              <span>{isUploadingMarksheet ? 'Uploading...' : 'Upload Marksheet'}</span>
+              <input
+                type="file"
+                accept=".pdf,.png,.jpg,.jpeg"
+                className="hidden"
+                disabled={isUploadingMarksheet}
+                onChange={async (e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  try {
+                    setIsUploadingMarksheet(true);
+                    setUploadNotice(null);
+                    await uploadDocument(file, 'academic_transcript');
+                    setUploadNotice(`Marksheet "${file.name}" uploaded to Supabase Storage vault successfully.`);
+                  } catch (err: any) {
+                    setUploadNotice(`Upload notice: ${err.message || 'Stored locally'}`);
+                  } finally {
+                    setIsUploadingMarksheet(false);
+                  }
+                }}
+              />
+            </label>
             <button
               onClick={() => {
                 setDegreeInput(profile.education.degree);
@@ -134,6 +166,19 @@ export const Pillar2Academics: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* Upload status banner if present */}
+        {uploadNotice && (
+          <div className="mt-4 p-3 bg-emerald-500/10 border border-emerald-500/30 rounded-xl text-xs text-emerald-300 flex items-center justify-between">
+            <span>{uploadNotice}</span>
+            <button
+              onClick={() => setUploadNotice(null)}
+              className="text-slate-400 hover:text-white text-xs font-bold px-1"
+            >
+              ×
+            </button>
+          </div>
+        )}
 
         {/* Highlighted Discrepancy Banner if present */}
         {profile.education.discrepancyFlag && (

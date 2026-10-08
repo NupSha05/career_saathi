@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useCallback } from 'react';
 import {
   StudentProfile,
   OpportunityJD,
@@ -13,6 +13,7 @@ import {
   EventImpactRecord,
   EmailLogEntry,
   AuthState,
+  AuthCredentials,
 } from '../types';
 import {
   calculateContextualRoleFit,
@@ -31,21 +32,31 @@ import {
   createBlankProductionProfile,
   DEFAULT_PRODUCTION_JDS,
 } from '../fixtures/demoData';
+import { getSupabaseClient, isSupabaseConfigured } from '../services/supabaseClient';
+import * as dbService from '../services/supabaseDataService';
 
 /**
  * Career Saathi Master Context
  *
- * Enforces strict separation between:
- * 1. Authentication & System Mode State
- * 2. Persistent User Application Data (Source of Truth)
- * 3. Derived Deterministic Intelligence (Pure Functions of Persistent Data)
- * 4. AI Analysis State (Explicit status, null baseline in production)
- * 5. Explicit Demo Mode Fixture Layer (Never used as production fallback)
+ * Authoritative Persistence Architecture:
+ * - Supabase Auth + PostgreSQL + Storage forms the authoritative bedrock for student data.
+ * - Derived deterministic calculations remain pure functions of authoritative state.
+ * - Controlled Demo Mode runs in an isolated fixture sandbox.
  */
 
 interface CareerSaathiContextType {
   // Auth & Mode State
   authState: AuthState;
+  authLoading: boolean;
+  authError: string | null;
+  isSupabaseConnected: boolean;
+  isSchemaMissing: boolean;
+  missingTables: string[];
+  refreshSchemaStatus: () => Promise<void>;
+  signIn: (email: string, password: string) => Promise<void>;
+  signUp: (creds: AuthCredentials) => Promise<void>;
+  signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<void>;
   isDemoMode: boolean;
   enableDemoMode: () => void;
   disableDemoMode: () => void;
@@ -89,19 +100,11 @@ interface CareerSaathiContextType {
   triggerLinkedInAnalysis: (customLinkedInData?: any) => Promise<void>;
   clearCVAnalysis: () => void;
   clearLinkedInAnalysis: () => void;
+  uploadDocument: (file: File, category: 'academic_transcript' | 'cv_resume' | 'jd_document' | 'certification_proof') => Promise<{ documentId: string; filePath: string; fileName: string } | null>;
 }
 
 const CareerSaathiContext = createContext<CareerSaathiContextType | null>(null);
 
-// Local Storage Keys
-const PROD_PROFILE_KEY = 'cs_prod_profile_v2';
-const PROD_JDS_KEY = 'cs_prod_jds_v2';
-const PROD_APPS_KEY = 'cs_prod_apps_v2';
-const PROD_PRACTICE_KEY = 'cs_prod_practice_v2';
-const PROD_EVENTS_KEY = 'cs_prod_events_v2';
-const PROD_EMAILS_KEY = 'cs_prod_emails_v2';
-const PROD_CV_KEY = 'cs_prod_cv_v2';
-const PROD_LINKEDIN_KEY = 'cs_prod_linkedin_v2';
 const DEMO_MODE_FLAG = 'cs_demo_mode_active';
 
 export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -110,21 +113,57 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return localStorage.getItem(DEMO_MODE_FLAG) === 'true';
   });
 
-  // 2. Persistent Application Data
+  // 2. Auth State
+  const [authStatus, setAuthStatus] = useState<AuthState['status']>('authenticating');
+  const [currentAuthUser, setCurrentAuthUser] = useState<AuthState['user']>(null);
+  const [authLoading, setAuthLoading] = useState<boolean>(false);
+  const [authError, setAuthError] = useState<string | null>(null);
+  const [isSupabaseConnected, setIsSupabaseConnected] = useState<boolean>(isSupabaseConfigured());
+  const [isSchemaMissing, setIsSchemaMissing] = useState<boolean>(dbService.getIsSchemaMissing());
+  const [missingTables, setMissingTables] = useState<string[]>(dbService.getMissingTables());
+
+  useEffect(() => {
+    const unsub = dbService.subscribeSchemaStatus((missing, tables) => {
+      setIsSchemaMissing(missing);
+      setMissingTables(tables);
+    });
+    return unsub;
+  }, []);
+
+  const refreshSchemaStatus = async () => {
+    try {
+      const res = await fetch('/api/supabase/schema-status');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.schema?.tablesExist) {
+          dbService.clearMissingTablesState();
+          setIsSchemaMissing(false);
+          setMissingTables([]);
+          if (currentAuthUser?.id) {
+            loadUserDataFromSupabase(currentAuthUser.id, currentAuthUser.email || '', currentAuthUser.name);
+          }
+        } else if (data.schema?.missingTables?.length > 0) {
+          data.schema.missingTables.forEach((t: string) => dbService.recordMissingTable(t));
+        }
+      }
+    } catch {
+      // ignore
+    }
+  };
+
+  // 3. Persistent Application Data
   const [profile, setProfile] = useState<StudentProfile>(() => {
     if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
       return AARAV_SHARMA_DEMO_PROFILE;
     }
-    const saved = localStorage.getItem(PROD_PROFILE_KEY);
-    return saved ? JSON.parse(saved) : createBlankProductionProfile();
+    return createBlankProductionProfile();
   });
 
   const [allJDs, setAllJDs] = useState<OpportunityJD[]>(() => {
     if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
       return DEMO_JDS;
     }
-    const saved = localStorage.getItem(PROD_JDS_KEY);
-    return saved ? JSON.parse(saved) : DEFAULT_PRODUCTION_JDS;
+    return DEFAULT_PRODUCTION_JDS;
   });
 
   const [activeJD, setActiveJDState] = useState<OpportunityJD>(() => {
@@ -135,52 +174,44 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
       return DEMO_APPLICATIONS;
     }
-    const saved = localStorage.getItem(PROD_APPS_KEY);
-    return saved ? JSON.parse(saved) : [];
+    return [];
   });
 
   const [practiceSessions, setPracticeSessions] = useState<PracticeSession[]>(() => {
     if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
       return DEMO_PRACTICE_SESSIONS;
     }
-    const saved = localStorage.getItem(PROD_PRACTICE_KEY);
-    return saved ? JSON.parse(saved) : [];
+    return [];
   });
 
   const [eventImpactLog, setEventImpactLog] = useState<EventImpactRecord[]>(() => {
     if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
       return DEMO_EVENT_LOG;
     }
-    const saved = localStorage.getItem(PROD_EVENTS_KEY);
-    return saved ? JSON.parse(saved) : [];
+    return [];
   });
 
-  const [emailLogs, setEmailLogs] = useState<EmailLogEntry[]>(() => {
-    const saved = localStorage.getItem(PROD_EMAILS_KEY);
-    return saved ? JSON.parse(saved) : [];
-  });
+  const [emailLogs, setEmailLogs] = useState<EmailLogEntry[]>([]);
 
-  // 3. AI Analysis State (null by default in production; populated only after real analysis)
+  // 4. AI Analysis State
   const [cvAnalysis, setCvAnalysis] = useState<CVAnalysis | null>(() => {
     if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
       return DEMO_CV_ANALYSIS;
     }
-    const saved = localStorage.getItem(PROD_CV_KEY);
-    return saved ? JSON.parse(saved) : null;
+    return null;
   });
 
   const [linkedInAnalysis, setLinkedInAnalysis] = useState<LinkedInAnalysis | null>(() => {
     if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
       return DEMO_LINKEDIN_ANALYSIS;
     }
-    const saved = localStorage.getItem(PROD_LINKEDIN_KEY);
-    return saved ? JSON.parse(saved) : null;
+    return null;
   });
 
   const [isAiProcessing, setIsAiProcessing] = useState<boolean>(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
-  // 4. Derived Deterministic State (Computed from Source of Truth)
+  // 5. Derived Deterministic State
   const readiness = useMemo(() => {
     return calculateReadiness(profile, practiceSessions);
   }, [profile, practiceSessions]);
@@ -193,7 +224,6 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return generatePrioritizedActions(profile, readiness, activeJD);
   }, [profile, readiness, activeJD]);
 
-  // Readiness snapshots
   const [readinessSnapshots, setReadinessSnapshots] = useState<ReadinessSnapshot[]>(() => {
     if (localStorage.getItem(DEMO_MODE_FLAG) === 'true') {
       return DEMO_READINESS_SNAPSHOTS;
@@ -201,86 +231,283 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     return [];
   });
 
-  // Update snapshots when readiness changes meaningfully
+  // Track readiness snapshot evolution
   useEffect(() => {
     if (!profile.name && readiness.overallScore === 0) return;
     const snapId = `snap-${Date.now()}`;
+    const snap: ReadinessSnapshot = {
+      ...readiness,
+      id: snapId,
+      timestamp: new Date().toISOString(),
+      triggerEvent: isDemoMode ? 'Demo State Active' : 'Evidence Repository Updated',
+    };
+
     setReadinessSnapshots((prev) => {
-      // Don't flood snapshots if the latest is identical
       const last = prev[prev.length - 1];
       if (last && last.overallScore === readiness.overallScore && last.academicReadiness === readiness.academicReadiness) {
         return prev;
       }
-      return [
-        ...prev.slice(-9), // Keep latest 10
-        {
-          ...readiness,
-          id: snapId,
-          timestamp: new Date().toISOString(),
-          triggerEvent: isDemoMode ? 'Demo State Active' : 'Evidence Repository Updated',
-        },
-      ];
+      return [...prev.slice(-9), snap];
     });
-  }, [readiness, isDemoMode, profile.name]);
 
-  // Sync to localStorage only when NOT in demo mode (persist production user state cleanly)
-  useEffect(() => {
-    if (!isDemoMode) {
-      localStorage.setItem(PROD_PROFILE_KEY, JSON.stringify(profile));
+    // If authenticated in production, persist snapshot to Supabase
+    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+      dbService.saveReadinessSnapshotToDb(currentAuthUser.id, profile.id, snap).catch(() => {});
     }
-  }, [profile, isDemoMode]);
+  }, [readiness, isDemoMode, profile.name, currentAuthUser?.id, profile.id]);
 
-  useEffect(() => {
-    if (!isDemoMode) {
-      localStorage.setItem(PROD_JDS_KEY, JSON.stringify(allJDs));
-    }
-  }, [allJDs, isDemoMode]);
+  // Load authenticated student data from Supabase
+  const loadUserDataFromSupabase = useCallback(async (userId: string, userEmail: string, userName?: string) => {
+    try {
+      setAuthLoading(true);
+      const studentProfile = await dbService.fetchFullStudentProfile(userId);
 
-  useEffect(() => {
-    if (!isDemoMode) {
-      localStorage.setItem(PROD_APPS_KEY, JSON.stringify(applications));
-    }
-  }, [applications, isDemoMode]);
-
-  useEffect(() => {
-    if (!isDemoMode) {
-      localStorage.setItem(PROD_PRACTICE_KEY, JSON.stringify(practiceSessions));
-    }
-  }, [practiceSessions, isDemoMode]);
-
-  useEffect(() => {
-    if (!isDemoMode) {
-      localStorage.setItem(PROD_EVENTS_KEY, JSON.stringify(eventImpactLog));
-    }
-  }, [eventImpactLog, isDemoMode]);
-
-  useEffect(() => {
-    if (!isDemoMode) {
-      localStorage.setItem(PROD_EMAILS_KEY, JSON.stringify(emailLogs));
-    }
-  }, [emailLogs, isDemoMode]);
-
-  useEffect(() => {
-    if (!isDemoMode) {
-      if (cvAnalysis) {
-        localStorage.setItem(PROD_CV_KEY, JSON.stringify(cvAnalysis));
+      if (studentProfile) {
+        setProfile(studentProfile);
       } else {
-        localStorage.removeItem(PROD_CV_KEY);
+        // First-time user profile initialization
+        const blank = createBlankProductionProfile();
+        blank.id = userId;
+        blank.email = userEmail;
+        blank.name = userName || userEmail.split('@')[0];
+        setProfile(blank);
+        await dbService.upsertStudentProfile(userId, blank);
       }
-    }
-  }, [cvAnalysis, isDemoMode]);
 
-  useEffect(() => {
-    if (!isDemoMode) {
-      if (linkedInAnalysis) {
-        localStorage.setItem(PROD_LINKEDIN_KEY, JSON.stringify(linkedInAnalysis));
+      // Fetch JDs
+      const dbJds = await dbService.fetchJobDescriptionsFromDb(userId);
+      if (dbJds.length > 0) {
+        setAllJDs(dbJds);
+        setActiveJDState(dbJds[0]);
       } else {
-        localStorage.removeItem(PROD_LINKEDIN_KEY);
+        setAllJDs(DEFAULT_PRODUCTION_JDS);
+        setActiveJDState(DEFAULT_PRODUCTION_JDS[0]);
       }
-    }
-  }, [linkedInAnalysis, isDemoMode]);
 
-  // 5. Controlled Demo Mode Switchers
+      // Fetch Applications
+      const dbApps = await dbService.fetchApplicationsFromDb(userId);
+      setApplications(dbApps);
+
+      // Fetch Practice Sessions
+      const dbPractice = await dbService.fetchPracticeSessionsFromDb(userId);
+      setPracticeSessions(dbPractice);
+
+      // Fetch Readiness Snapshots
+      const dbSnaps = await dbService.fetchReadinessSnapshotsFromDb(userId);
+      if (dbSnaps.length > 0) {
+        setReadinessSnapshots(dbSnaps);
+      }
+
+      // Fetch Event Impact Logs
+      const dbEvents = await dbService.fetchEventImpactLogsFromDb(userId);
+      setEventImpactLog(dbEvents);
+
+      // Fetch Email Logs
+      const dbEmails = await dbService.fetchEmailLogsFromDb(userId);
+      setEmailLogs(dbEmails);
+
+      // Fetch Analyses
+      const dbCv = await dbService.fetchCvAnalysisFromDb(userId);
+      if (dbCv) setCvAnalysis(dbCv);
+
+      const dbLinkedIn = await dbService.fetchLinkedInAnalysisFromDb(userId);
+      if (dbLinkedIn) setLinkedInAnalysis(dbLinkedIn);
+
+    } catch (err) {
+      console.error('Error loading data from Supabase:', err);
+    } finally {
+      setAuthLoading(false);
+    }
+  }, []);
+
+  // Initialize Supabase Auth Session listener
+  useEffect(() => {
+    const supabase = getSupabaseClient();
+    if (!supabase || !isSupabaseConfigured()) {
+      setIsSupabaseConnected(false);
+      setAuthStatus('unauthenticated');
+      return;
+    }
+
+    setIsSupabaseConnected(true);
+
+    // Initial session check
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        console.error('Session retrieval error:', error);
+        setAuthStatus('unauthenticated');
+        return;
+      }
+
+      if (session?.user && !isDemoMode) {
+        const u = session.user;
+        const name = (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || 'Student';
+        setCurrentAuthUser({
+          id: u.id,
+          email: u.email || '',
+          name,
+          role: 'student',
+          authProvider: 'supabase',
+          createdAt: u.created_at,
+        });
+        setAuthStatus('authenticated');
+        loadUserDataFromSupabase(u.id, u.email || '', name);
+      } else {
+        setAuthStatus('unauthenticated');
+      }
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user && !isDemoMode) {
+        const u = session.user;
+        const name = (u.user_metadata?.full_name as string) || u.email?.split('@')[0] || 'Student';
+        setCurrentAuthUser({
+          id: u.id,
+          email: u.email || '',
+          name,
+          role: 'student',
+          authProvider: 'supabase',
+          createdAt: u.created_at,
+        });
+        setAuthStatus('authenticated');
+        loadUserDataFromSupabase(u.id, u.email || '', name);
+      } else if (!session && !isDemoMode) {
+        setCurrentAuthUser(null);
+        setAuthStatus('unauthenticated');
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, [isDemoMode, loadUserDataFromSupabase]);
+
+  // Auth Operations
+  const signIn = async (email: string, password: string) => {
+    const supabase = getSupabaseClient();
+    if (!supabase || !isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured. Please supply VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
+    }
+
+    setAuthLoading(true);
+    setAuthError(null);
+
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) {
+      setAuthLoading(false);
+      setAuthError(error.message);
+      throw error;
+    }
+
+    if (data.user) {
+      setIsDemoMode(false);
+      localStorage.removeItem(DEMO_MODE_FLAG);
+      const name = (data.user.user_metadata?.full_name as string) || data.user.email?.split('@')[0] || 'Student';
+      setCurrentAuthUser({
+        id: data.user.id,
+        email: data.user.email || '',
+        name,
+        role: 'student',
+        authProvider: 'supabase',
+        createdAt: data.user.created_at,
+      });
+      setAuthStatus('authenticated');
+      await loadUserDataFromSupabase(data.user.id, data.user.email || '', name);
+    }
+    setAuthLoading(false);
+  };
+
+  const signUp = async (creds: AuthCredentials) => {
+    const supabase = getSupabaseClient();
+    if (!supabase || !isSupabaseConfigured()) {
+      throw new Error('Supabase is not configured. Please supply VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
+    }
+
+    setAuthLoading(true);
+    setAuthError(null);
+
+    const { data, error } = await supabase.auth.signUp({
+      email: creds.email,
+      password: creds.password,
+      options: {
+        data: {
+          full_name: creds.fullName || '',
+          college: creds.college || '',
+          branch: creds.branch || '',
+        },
+      },
+    });
+
+    if (error) {
+      setAuthLoading(false);
+      setAuthError(error.message);
+      throw error;
+    }
+
+    if (data.user) {
+      setIsDemoMode(false);
+      localStorage.removeItem(DEMO_MODE_FLAG);
+      const name = creds.fullName || data.user.email?.split('@')[0] || 'Student';
+      setCurrentAuthUser({
+        id: data.user.id,
+        email: data.user.email || '',
+        name,
+        role: 'student',
+        authProvider: 'supabase',
+        createdAt: data.user.created_at,
+      });
+      setAuthStatus('authenticated');
+
+      // Initialize base profile in DB
+      const initialProfile = createBlankProductionProfile();
+      initialProfile.id = data.user.id;
+      initialProfile.name = name;
+      initialProfile.email = data.user.email || '';
+      initialProfile.college = creds.college || '';
+      initialProfile.education.institution = creds.college || '';
+      initialProfile.education.branch = creds.branch || 'Computer Science & Engineering';
+
+      setProfile(initialProfile);
+      await dbService.upsertStudentProfile(data.user.id, initialProfile);
+      await dbService.upsertEducation(data.user.id, initialProfile.id, initialProfile.education);
+    }
+    setAuthLoading(false);
+  };
+
+  const signOut = async () => {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      await supabase.auth.signOut();
+    }
+    setCurrentAuthUser(null);
+    setAuthStatus('unauthenticated');
+    setProfile(createBlankProductionProfile());
+    setAllJDs(DEFAULT_PRODUCTION_JDS);
+    setActiveJDState(DEFAULT_PRODUCTION_JDS[0]);
+    setApplications([]);
+    setPracticeSessions([]);
+    setCvAnalysis(null);
+    setLinkedInAnalysis(null);
+    setEventImpactLog([]);
+    setEmailLogs([]);
+    setReadinessSnapshots([]);
+  };
+
+  const resetPassword = async (email: string) => {
+    const supabase = getSupabaseClient();
+    if (!supabase || !isSupabaseConfigured()) {
+      throw new Error('Supabase Auth is not configured. Please supply VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY.');
+    }
+    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+      redirectTo: window.location.origin,
+    });
+    if (error) {
+      throw error;
+    }
+  };
+
+  // 6. Controlled Demo Mode Switchers
   const enableDemoMode = () => {
     localStorage.setItem(DEMO_MODE_FLAG, 'true');
     setIsDemoMode(true);
@@ -298,38 +525,26 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const disableDemoMode = () => {
     localStorage.removeItem(DEMO_MODE_FLAG);
     setIsDemoMode(false);
-    // Reload user production data
-    const savedProfile = localStorage.getItem(PROD_PROFILE_KEY);
-    setProfile(savedProfile ? JSON.parse(savedProfile) : createBlankProductionProfile());
-    const savedJDs = localStorage.getItem(PROD_JDS_KEY);
-    const prodJDs = savedJDs ? JSON.parse(savedJDs) : DEFAULT_PRODUCTION_JDS;
-    setAllJDs(prodJDs);
-    setActiveJDState(prodJDs[0] || DEFAULT_PRODUCTION_JDS[0]);
-    const savedApps = localStorage.getItem(PROD_APPS_KEY);
-    setApplications(savedApps ? JSON.parse(savedApps) : []);
-    const savedPractice = localStorage.getItem(PROD_PRACTICE_KEY);
-    setPracticeSessions(savedPractice ? JSON.parse(savedPractice) : []);
-    const savedEvents = localStorage.getItem(PROD_EVENTS_KEY);
-    setEventImpactLog(savedEvents ? JSON.parse(savedEvents) : []);
-    const savedCv = localStorage.getItem(PROD_CV_KEY);
-    setCvAnalysis(savedCv ? JSON.parse(savedCv) : null);
-    const savedLinkedIn = localStorage.getItem(PROD_LINKEDIN_KEY);
-    setLinkedInAnalysis(savedLinkedIn ? JSON.parse(savedLinkedIn) : null);
-    setReadinessSnapshots([]);
+
+    if (currentAuthUser && isSupabaseConfigured()) {
+      loadUserDataFromSupabase(currentAuthUser.id, currentAuthUser.email, currentAuthUser.name);
+    } else {
+      setProfile(createBlankProductionProfile());
+      setAllJDs(DEFAULT_PRODUCTION_JDS);
+      setActiveJDState(DEFAULT_PRODUCTION_JDS[0]);
+      setApplications([]);
+      setPracticeSessions([]);
+      setCvAnalysis(null);
+      setLinkedInAnalysis(null);
+      setEventImpactLog([]);
+      setEmailLogs([]);
+      setReadinessSnapshots([]);
+    }
   };
 
   const resetProductionData = () => {
-    localStorage.removeItem(PROD_PROFILE_KEY);
-    localStorage.removeItem(PROD_JDS_KEY);
-    localStorage.removeItem(PROD_APPS_KEY);
-    localStorage.removeItem(PROD_PRACTICE_KEY);
-    localStorage.removeItem(PROD_EVENTS_KEY);
-    localStorage.removeItem(PROD_EMAILS_KEY);
-    localStorage.removeItem(PROD_CV_KEY);
-    localStorage.removeItem(PROD_LINKEDIN_KEY);
     localStorage.removeItem(DEMO_MODE_FLAG);
     setIsDemoMode(false);
-
     setProfile(createBlankProductionProfile());
     setAllJDs(DEFAULT_PRODUCTION_JDS);
     setActiveJDState(DEFAULT_PRODUCTION_JDS[0]);
@@ -342,7 +557,7 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setReadinessSnapshots([]);
   };
 
-  // 6. Traceability & Mutation Methods
+  // 7. Traceability & Mutation Methods
   const logEventImpact = (eventType: string, sourcePillar: string, affected: string[], explanation: string) => {
     const newRecord: EventImpactRecord = {
       id: `ev-${Date.now()}`,
@@ -353,10 +568,23 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
       explanation,
     };
     setEventImpactLog((prev) => [newRecord, ...prev]);
+
+    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+      dbService.saveEventImpactLogToDb(currentAuthUser.id, profile.id, newRecord).catch(() => {});
+    }
   };
 
   const updateProfile = (updated: Partial<StudentProfile>) => {
-    setProfile((prev) => ({ ...prev, ...updated }));
+    setProfile((prev) => {
+      const next = { ...prev, ...updated };
+      if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+        dbService.upsertStudentProfile(currentAuthUser.id, next).catch((err) =>
+          console.warn('Persist profile warning (safely stored locally):', err?.message || err)
+        );
+      }
+      return next;
+    });
+
     logEventImpact(
       'Profile Information Updated',
       'Pillar 1: Student Intelligence Profile',
@@ -368,8 +596,15 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const updateEducation = (edu: Partial<StudentProfile['education']>) => {
     setProfile((prev) => {
       const newEdu = { ...prev.education, ...edu };
-      return { ...prev, education: newEdu };
+      const next = { ...prev, education: newEdu };
+      if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+        dbService.upsertEducation(currentAuthUser.id, prev.id, newEdu).catch((err) =>
+          console.warn('Persist education warning (safely stored locally):', err?.message || err)
+        );
+      }
+      return next;
     });
+
     logEventImpact(
       'Academic Record Modified',
       'Pillar 2: Academic Intelligence',
@@ -379,11 +614,23 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const addProject = (proj: Omit<StudentProfile['projects'][0], 'id'>) => {
-    const newProj = { ...proj, id: `proj-${Date.now()}` };
+    const tempId = `proj-${Date.now()}`;
+    const newProj = { ...proj, id: tempId };
+
     setProfile((prev) => ({
       ...prev,
       projects: [newProj, ...prev.projects],
     }));
+
+    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+      dbService.addProjectToDb(currentAuthUser.id, profile.id, proj).then((dbId) => {
+        setProfile((prev) => ({
+          ...prev,
+          projects: prev.projects.map((p) => (p.id === tempId ? { ...p, id: dbId } : p)),
+        }));
+      }).catch((err) => console.error('Failed to persist project:', err));
+    }
+
     logEventImpact(
       `Project Recorded: "${proj.title}"`,
       'Pillar 1: Student Intelligence Profile',
@@ -393,11 +640,23 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const addSkill = (skill: Omit<StudentProfile['skills'][0], 'id'>) => {
-    const newSkill = { ...skill, id: `sk-${Date.now()}` };
+    const tempId = `sk-${Date.now()}`;
+    const newSkill = { ...skill, id: tempId };
+
     setProfile((prev) => ({
       ...prev,
       skills: [...prev.skills, newSkill],
     }));
+
+    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+      dbService.addSkillToDb(currentAuthUser.id, profile.id, skill).then((dbId) => {
+        setProfile((prev) => ({
+          ...prev,
+          skills: prev.skills.map((s) => (s.id === tempId ? { ...s, id: dbId } : s)),
+        }));
+      }).catch((err) => console.error('Failed to persist skill:', err));
+    }
+
     logEventImpact(
       `Skill Capability Added: ${skill.name}`,
       'Pillar 3: Career & Profile Intelligence',
@@ -419,6 +678,13 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const addJD = (jd: OpportunityJD) => {
     setAllJDs((prev) => [jd, ...prev]);
     setActiveJDState(jd);
+
+    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+      dbService.saveJobDescriptionToDb(currentAuthUser.id, profile.id, jd).catch((err) =>
+        console.error('Failed to persist JD:', err)
+      );
+    }
+
     logEventImpact(
       `New Job Description Added: ${jd.company}`,
       'Pillar 4: JD & Opportunity Intelligence',
@@ -428,36 +694,66 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const updateApplicationStage = (appId: string, newStage: ApplicationRecord['stage'], note?: string) => {
+    const now = new Date().toISOString();
+    let updatedApp: ApplicationRecord | null = null;
+
     setApplications((prev) =>
       prev.map((app) => {
         if (app.id !== appId) return app;
-        const newHistory = [...app.history, { stage: newStage, timestamp: new Date().toISOString(), comment: note }];
-        return {
+        const newHistory = [...app.history, { stage: newStage, timestamp: now, comment: note }];
+        const modified: ApplicationRecord = {
           ...app,
           stage: newStage,
-          stageUpdatedDate: new Date().toISOString(),
+          stageUpdatedDate: now,
           history: newHistory,
         };
+        updatedApp = modified;
+        return modified;
       })
     );
+
+    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured() && updatedApp) {
+      const appRef: ApplicationRecord = updatedApp;
+      dbService.updateApplicationStageInDb(
+        currentAuthUser.id,
+        appId,
+        newStage,
+        appRef.healthCategory,
+        appRef.healthRationale,
+        note
+      ).catch((err) => console.error('Failed to update application stage in DB:', err));
+    }
+
     logEventImpact(
       `Application Stage Advanced: "${newStage}"`,
       'Pillar 7: Application Intelligence',
       ['Application Pipeline', 'Interview Priority'],
-      `Transitioned lifecycle state.`
+      'Transitioned lifecycle state.'
     );
   };
 
   const addApplication = (appData: Omit<ApplicationRecord, 'id' | 'healthCategory' | 'healthRationale' | 'history' | 'stageUpdatedDate'>) => {
+    const tempId = `app-${Date.now()}`;
+    const now = new Date().toISOString();
     const newApp: ApplicationRecord = {
       ...appData,
-      id: `app-${Date.now()}`,
-      stageUpdatedDate: new Date().toISOString(),
+      id: tempId,
+      stageUpdatedDate: now,
       healthCategory: 'Healthy',
       healthRationale: 'Application newly recorded in active tracking lifecycle.',
-      history: [{ stage: appData.stage, timestamp: new Date().toISOString(), comment: 'Logged in tracker' }],
+      history: [{ stage: appData.stage, timestamp: now, comment: 'Logged in tracker' }],
     };
+
     setApplications((prev) => [newApp, ...prev]);
+
+    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+      dbService.saveApplicationToDb(currentAuthUser.id, profile.id, newApp).then((dbId) => {
+        setApplications((prev) =>
+          prev.map((a) => (a.id === tempId ? { ...a, id: dbId } : a))
+        );
+      }).catch((err) => console.error('Failed to persist application:', err));
+    }
+
     logEventImpact(
       `Application Tracked: ${newApp.company} (${newApp.role})`,
       'Pillar 7: Application Intelligence',
@@ -467,12 +763,24 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const recordPracticeSession = (sessionData: Omit<PracticeSession, 'id' | 'completedAt'>) => {
+    const tempId = `prac-${Date.now()}`;
+    const now = new Date().toISOString();
     const newSession: PracticeSession = {
       ...sessionData,
-      id: `prac-${Date.now()}`,
-      completedAt: new Date().toISOString(),
+      id: tempId,
+      completedAt: now,
     };
+
     setPracticeSessions((prev) => [newSession, ...prev]);
+
+    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+      dbService.savePracticeSessionToDb(currentAuthUser.id, profile.id, newSession).then((dbId) => {
+        setPracticeSessions((prev) =>
+          prev.map((s) => (s.id === tempId ? { ...s, id: dbId } : s))
+        );
+      }).catch((err) => console.error('Failed to persist practice session:', err));
+    }
+
     logEventImpact(
       `Practice Coach Session Evaluated: ${sessionData.category}`,
       'Pillar 8: Preparation Coach',
@@ -482,17 +790,28 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   const reconcileDiscrepancy = (authoritativeValue: number) => {
-    setProfile((prev) => ({
-      ...prev,
-      education: {
-        ...prev.education,
-        selfReportedCGPA: authoritativeValue,
-        verifiedCGPA: authoritativeValue,
-        discrepancyFlag: false,
-        verificationStatus: 'verified',
-        provenance: 'verified',
-      },
-    }));
+    setProfile((prev) => {
+      const next = {
+        ...prev,
+        education: {
+          ...prev.education,
+          selfReportedCGPA: authoritativeValue,
+          verifiedCGPA: authoritativeValue,
+          discrepancyFlag: false,
+          verificationStatus: 'verified' as const,
+          provenance: 'verified' as const,
+        },
+      };
+
+      if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+        dbService.upsertEducation(currentAuthUser.id, prev.id, next.education).catch((err) =>
+          console.error('Failed to persist reconciled education:', err)
+        );
+      }
+
+      return next;
+    });
+
     logEventImpact(
       'Academic Discrepancy Reconciled by Student',
       'Pillar 2: Academic Intelligence',
@@ -503,6 +822,13 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
 
   const logEmailDispatch = (entry: EmailLogEntry) => {
     setEmailLogs((prev) => [entry, ...prev]);
+
+    if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+      dbService.saveEmailLogToDb(currentAuthUser.id, profile.id, entry).catch((err) =>
+        console.error('Failed to persist email log:', err)
+      );
+    }
+
     logEventImpact(
       `Report Activity Logged: "${entry.reportTitle}"`,
       'Cross-Product Layer: Report Center',
@@ -527,8 +853,15 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!res.ok) {
         throw new Error(`AI CV analysis failed: ${res.statusText}`);
       }
-      const data = await res.json();
+      const data: CVAnalysis = await res.json();
       setCvAnalysis(data);
+
+      if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+        dbService.saveCvAnalysisToDb(currentAuthUser.id, profile.id, data).catch((err) =>
+          console.error('Failed to persist CV analysis:', err)
+        );
+      }
+
       logEventImpact(
         'CV Triad Analysis Completed',
         'Pillar 5: CV Intelligence',
@@ -561,8 +894,15 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
       if (!res.ok) {
         throw new Error(`LinkedIn analysis failed: ${res.statusText}`);
       }
-      const data = await res.json();
+      const data: LinkedInAnalysis = await res.json();
       setLinkedInAnalysis(data);
+
+      if (!isDemoMode && currentAuthUser?.id && isSupabaseConfigured()) {
+        dbService.saveLinkedInAnalysisToDb(currentAuthUser.id, profile.id, data).catch((err) =>
+          console.error('Failed to persist LinkedIn analysis:', err)
+        );
+      }
+
       logEventImpact(
         'LinkedIn Recruiter Visibility Audited',
         'Pillar 6: LinkedIn Intelligence',
@@ -585,8 +925,16 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
     setLinkedInAnalysis(null);
   };
 
+  const uploadDocument = async (
+    file: File,
+    category: 'academic_transcript' | 'cv_resume' | 'jd_document' | 'certification_proof'
+  ) => {
+    const userId = currentAuthUser?.id || (isDemoMode ? 'demo-user-01' : 'student-local');
+    return dbService.uploadDocumentToStorage(userId, profile.id, file, category);
+  };
+
   const authState: AuthState = {
-    status: isDemoMode ? 'authenticated' : (profile.name ? 'authenticated' : 'unauthenticated'),
+    status: isDemoMode ? 'authenticated' : authStatus,
     user: isDemoMode
       ? {
           id: 'demo-user-01',
@@ -596,23 +944,26 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
           authProvider: 'guest',
           createdAt: '2026-10-06T00:00:00Z',
         }
-      : profile.name
-      ? {
-          id: profile.id,
-          email: profile.email || 'student@careersaathi.app',
-          name: profile.name,
-          role: 'student',
-          authProvider: 'local',
-          createdAt: new Date().toISOString(),
-        }
-      : null,
+      : currentAuthUser,
     mode: isDemoMode ? 'demo' : 'production',
+    isSupabaseConnected,
+    error: authError,
   };
 
   return (
     <CareerSaathiContext.Provider
       value={{
         authState,
+        authLoading,
+        authError,
+        isSupabaseConnected,
+        isSchemaMissing,
+        missingTables,
+        refreshSchemaStatus,
+        signIn,
+        signUp,
+        signOut,
+        resetPassword,
         isDemoMode,
         enableDemoMode,
         disableDemoMode,
@@ -648,6 +999,7 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
         triggerLinkedInAnalysis,
         clearCVAnalysis,
         clearLinkedInAnalysis,
+        uploadDocument,
       }}
     >
       {children}

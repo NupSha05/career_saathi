@@ -111,19 +111,25 @@ export const Pillar3CareerIntelligence: React.FC = () => {
             Backed by live production codebase, paid internship metrics, or full repository architectures.
           </p>
           <div className="space-y-2.5">
-            {highEvidenceSkills.map((s) => (
-              <div key={s.id} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 text-xs">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-bold text-white">{s.name}</span>
-                  <span className="text-[10px] text-emerald-400 font-semibold">{s.relevance}</span>
+            {highEvidenceSkills.length > 0 ? (
+              highEvidenceSkills.map((s) => (
+                <div key={s.id} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 text-xs">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-white">{s.name}</span>
+                    <span className="text-[10px] text-emerald-400 font-semibold">{s.relevance}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 space-y-0.5">
+                    {s.supportingEvidence.map((ev, i) => (
+                      <div key={i} className="truncate">• {ev}</div>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-[10px] text-slate-400 space-y-0.5">
-                  {s.supportingEvidence.map((ev, i) => (
-                    <div key={i} className="truncate">• {ev}</div>
-                  ))}
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic py-4 text-center">
+                No Level 3–4 evidence recorded. Add verified internship or production work in Pillar 1.
+              </p>
+            )}
           </div>
         </div>
 
@@ -142,19 +148,25 @@ export const Pillar3CareerIntelligence: React.FC = () => {
             Backed by academic and personal code repositories, demonstrating functional synthesis.
           </p>
           <div className="space-y-2.5">
-            {mediumEvidenceSkills.map((s) => (
-              <div key={s.id} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 text-xs">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-bold text-white">{s.name}</span>
-                  <span className="text-[10px] text-purple-300 font-semibold">{s.relevance}</span>
+            {mediumEvidenceSkills.length > 0 ? (
+              mediumEvidenceSkills.map((s) => (
+                <div key={s.id} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 text-xs">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-white">{s.name}</span>
+                    <span className="text-[10px] text-purple-300 font-semibold">{s.relevance}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 space-y-0.5">
+                    {s.supportingEvidence.map((ev, i) => (
+                      <div key={i} className="truncate">• {ev}</div>
+                    ))}
+                  </div>
                 </div>
-                <div className="text-[10px] text-slate-400 space-y-0.5">
-                  {s.supportingEvidence.map((ev, i) => (
-                    <div key={i} className="truncate">• {ev}</div>
-                  ))}
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic py-4 text-center">
+                No Level 2 project proof recorded. Log code repositories in Pillar 1.
+              </p>
+            )}
           </div>
         </div>
 
@@ -173,20 +185,26 @@ export const Pillar3CareerIntelligence: React.FC = () => {
             Theory or claim only. Prime targets for conversion into repository or deployed evidence.
           </p>
           <div className="space-y-2.5">
-            {foundationalSkills.map((s) => (
-              <div key={s.id} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 text-xs">
-                <div className="flex justify-between items-center mb-1">
-                  <span className="font-bold text-white">{s.name}</span>
-                  <span className="text-[10px] text-amber-400 font-semibold">{s.relevance}</span>
+            {foundationalSkills.length > 0 ? (
+              foundationalSkills.map((s) => (
+                <div key={s.id} className="bg-slate-800/60 border border-slate-700/60 rounded-xl p-3 text-xs">
+                  <div className="flex justify-between items-center mb-1">
+                    <span className="font-bold text-white">{s.name}</span>
+                    <span className="text-[10px] text-amber-400 font-semibold">{s.relevance}</span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 mb-1">
+                    {s.supportingEvidence.join(', ')}
+                  </p>
+                  <span className="text-[10px] text-indigo-400 font-medium block">
+                    Action: Build 1 deployed module to upgrade to Level 2
+                  </span>
                 </div>
-                <p className="text-[11px] text-slate-400 mb-1">
-                  {s.supportingEvidence.join(', ')}
-                </p>
-                <span className="text-[10px] text-indigo-400 font-medium block">
-                  Action: Build 1 deployed module to upgrade to Level 2
-                </span>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic py-4 text-center">
+                No foundational or unbacked skills logged. Add skills in Pillar 1.
+              </p>
+            )}
           </div>
         </div>
       </div>

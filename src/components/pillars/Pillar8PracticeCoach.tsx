@@ -21,7 +21,7 @@ const SAMPLE_QUESTIONS = [
     framework: 'STAR (Situation, Task, Action, Result)',
     question: 'Tell me about a challenging technical hurdle you faced during a project or internship, and how you overcame it.',
     sampleAnswer:
-      'Situation: During my internship at HyperGrowth Labs, API latency on customer dashboards spiked above 3.5 seconds. Task: I was tasked with investigating root cause. Action: I used pg_stat_statements to find unindexed joins, created composite indexes on user_id and created_at, and introduced Redis caching for common queries. Result: Latency dropped by 38% down to 2.1 seconds, directly improving user experience.',
+      'Situation: During a distributed web services project, API latency on customer dashboards spiked above 3.5 seconds. Task: I was tasked with investigating root cause. Action: I used query profiling to find unindexed joins, created composite indexes on user_id and created_at, and introduced in-memory caching for common queries. Result: Latency dropped by 38% down to 2.1 seconds, directly improving user experience.',
   },
   {
     category: 'Technical' as const,

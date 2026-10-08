@@ -89,7 +89,15 @@ export const ActionCenterView: React.FC<ActionCenterViewProps> = ({ setActiveTab
 
       {/* Action Cards List */}
       <div className="space-y-4">
-        {filteredActions.map((action) => {
+        {filteredActions.length === 0 ? (
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-10 text-center shadow-lg space-y-2">
+            <p className="text-sm font-semibold text-white">No actions in this view.</p>
+            <p className="text-xs text-slate-400">
+              Configure your candidate profile, target opportunity, or CV analysis to generate prioritized strategic milestones.
+            </p>
+          </div>
+        ) : (
+          filteredActions.map((action) => {
           const isDone = completedIds.includes(action.id);
           const targetTab = getPillarTab(action.pillarTarget);
 
@@ -162,7 +170,8 @@ export const ActionCenterView: React.FC<ActionCenterViewProps> = ({ setActiveTab
               </div>
             </div>
           );
-        })}
+        })
+        )}
       </div>
     </div>
   );

@@ -48,10 +48,10 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ setActiveTab, onOp
               <span>Career Saathi Cockpit • Persistent Student State</span>
             </div>
             <h1 className="text-2xl sm:text-3xl font-extrabold text-white tracking-tight">
-              Welcome back, {profile.name}
+              {profile.name ? `Welcome back, ${profile.name}` : 'Welcome to Career Saathi AI'}
             </h1>
             <p className="text-sm text-slate-400 mt-1 max-w-2xl">
-              Targeting: <span className="text-slate-200 font-medium">{profile.preferences.targetRoles.join(', ')}</span> • {profile.college}
+              Targeting: <span className="text-slate-200 font-medium">{profile.preferences.targetRoles.join(', ')}</span> {profile.college ? `• ${profile.college}` : '• Setup profile in Pillar 1'}
             </p>
           </div>
 
@@ -105,12 +105,18 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ setActiveTab, onOp
             <span className="text-[11px] font-semibold text-slate-300 uppercase tracking-wider block">
               Key Contributors:
             </span>
-            {readiness.positiveContributors.slice(0, 2).map((item, i) => (
-              <div key={i} className="flex items-start gap-2 text-xs text-emerald-400/90">
-                <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                <span>{item}</span>
-              </div>
-            ))}
+            {readiness.positiveContributors.length > 0 ? (
+              readiness.positiveContributors.slice(0, 2).map((item, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs text-emerald-400/90">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+                  <span>{item}</span>
+                </div>
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic">
+                Add academic terms and verified skills to establish readiness contributors.
+              </p>
+            )}
           </div>
         </div>
 
@@ -299,30 +305,36 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ setActiveTab, onOp
           </div>
 
           <div className="space-y-3">
-            {actions.slice(0, 3).map((action) => (
-              <div
-                key={action.id}
-                className="bg-slate-800/70 border border-slate-700/60 hover:border-slate-600 rounded-xl p-3.5 transition"
-              >
-                <div className="flex items-center justify-between gap-2 mb-1">
-                  <span className="text-xs font-bold text-white line-clamp-1">{action.title}</span>
-                  <span
-                    className={`text-[10px] px-2 py-0.5 rounded font-semibold shrink-0 ${
-                      action.impact === 'High Impact'
-                        ? 'bg-emerald-500/20 text-emerald-300'
-                        : 'bg-blue-500/20 text-blue-300'
-                    }`}
-                  >
-                    {action.impact}
-                  </span>
+            {actions.length > 0 ? (
+              actions.slice(0, 3).map((action) => (
+                <div
+                  key={action.id}
+                  className="bg-slate-800/70 border border-slate-700/60 hover:border-slate-600 rounded-xl p-3.5 transition"
+                >
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="text-xs font-bold text-white line-clamp-1">{action.title}</span>
+                    <span
+                      className={`text-[10px] px-2 py-0.5 rounded font-semibold shrink-0 ${
+                        action.impact === 'High Impact'
+                          ? 'bg-emerald-500/20 text-emerald-300'
+                          : 'bg-blue-500/20 text-blue-300'
+                      }`}
+                    >
+                      {action.impact}
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 line-clamp-2 mb-2">{action.description}</p>
+                  <div className="flex items-center justify-between text-[10px] text-slate-400">
+                    <span className="text-indigo-400 font-medium">{action.pillarTarget}</span>
+                    <span className="text-amber-400 font-medium">{action.effort}</span>
+                  </div>
                 </div>
-                <p className="text-[11px] text-slate-400 line-clamp-2 mb-2">{action.description}</p>
-                <div className="flex items-center justify-between text-[10px] text-slate-400">
-                  <span className="text-indigo-400 font-medium">{action.pillarTarget}</span>
-                  <span className="text-amber-400 font-medium">{action.effort}</span>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic py-3 text-center">
+                No immediate actions pending. Setup profile evidence to generate prioritized actions.
+              </p>
+            )}
           </div>
         </div>
       </div>
@@ -345,23 +357,29 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ setActiveTab, onOp
           </div>
 
           <div className="space-y-3">
-            {activeApps.map((app) => (
-              <div
-                key={app.id}
-                className="flex items-center justify-between p-3 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs"
-              >
-                <div>
-                  <span className="font-bold text-white block">{app.company}</span>
-                  <span className="text-[11px] text-slate-400">{app.role}</span>
+            {activeApps.length > 0 ? (
+              activeApps.map((app) => (
+                <div
+                  key={app.id}
+                  className="flex items-center justify-between p-3 bg-slate-800/60 border border-slate-700/50 rounded-xl text-xs"
+                >
+                  <div>
+                    <span className="font-bold text-white block">{app.company}</span>
+                    <span className="text-[11px] text-slate-400">{app.role}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
+                      {app.stage}
+                    </span>
+                    <span className="block text-[10px] text-slate-500 mt-1">Applied: {app.appliedDate}</span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="px-2.5 py-0.5 rounded-full text-[10px] font-semibold bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                    {app.stage}
-                  </span>
-                  <span className="block text-[10px] text-slate-500 mt-1">Applied: {app.appliedDate}</span>
-                </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic py-4 text-center">
+                No active applications in funnel. Log job applications in Pillar 7.
+              </p>
+            )}
           </div>
         </div>
 
@@ -376,30 +394,36 @@ export const CommandCenter: React.FC<CommandCenterProps> = ({ setActiveTab, onOp
           </div>
 
           <div className="space-y-3 max-h-56 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-800 pr-1">
-            {eventImpactLog.slice(0, 4).map((ev) => (
-              <div
-                key={ev.id}
-                className="p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl text-xs space-y-1"
-              >
-                <div className="flex justify-between items-start">
-                  <span className="font-semibold text-white">{ev.eventType}</span>
-                  <span className="text-[10px] text-slate-500 font-mono">
-                    {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                  </span>
-                </div>
-                <p className="text-[11px] text-slate-400">{ev.explanation}</p>
-                <div className="flex flex-wrap gap-1 pt-1">
-                  {ev.affectedDimensions.map((dim, i) => (
-                    <span
-                      key={i}
-                      className="text-[9px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium"
-                    >
-                      {dim}
+            {eventImpactLog.length > 0 ? (
+              eventImpactLog.slice(0, 4).map((ev) => (
+                <div
+                  key={ev.id}
+                  className="p-3 bg-slate-800/40 border border-slate-700/40 rounded-xl text-xs space-y-1"
+                >
+                  <div className="flex justify-between items-start">
+                    <span className="font-semibold text-white">{ev.eventType}</span>
+                    <span className="text-[10px] text-slate-500 font-mono">
+                      {new Date(ev.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
-                  ))}
+                  </div>
+                  <p className="text-[11px] text-slate-400">{ev.explanation}</p>
+                  <div className="flex flex-wrap gap-1 pt-1">
+                    {ev.affectedDimensions.map((dim, i) => (
+                      <span
+                        key={i}
+                        className="text-[9px] bg-slate-700 text-slate-300 px-1.5 py-0.5 rounded font-medium"
+                      >
+                        {dim}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))
+            ) : (
+              <p className="text-xs text-slate-500 italic py-4 text-center">
+                No activity events logged yet. Actions in any pillar will stream audit updates here.
+              </p>
+            )}
           </div>
         </div>
       </div>
