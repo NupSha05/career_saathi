@@ -1,0 +1,310 @@
+export type DataProvenance =
+  | 'user_provided'
+  | 'extracted'
+  | 'verified'
+  | 'system_derived'
+  | 'deterministic'
+  | 'ai_interpreted'
+  | 'ai_recommended'
+  | 'estimate'
+  | 'uncertain';
+
+export type VerificationStatus = 'verified' | 'pending_verification' | 'discrepancy' | 'unverified';
+
+export type EvidenceLevel = 0 | 1 | 2 | 3 | 4;
+
+export type EvidenceRelevance = 'Directly Relevant' | 'Transferably Relevant' | 'Low Relevance';
+
+export type GapType = 'Profile Gap' | 'CV Gap' | 'Evidence Gap';
+
+export type PriorityLevel = 'Critical' | 'High' | 'Medium' | 'Low';
+
+export type ApplicationStage =
+  | 'Applied'
+  | 'Shortlisted'
+  | 'Assessment Pending'
+  | 'GD Pending'
+  | 'Interview Pending'
+  | 'Result Awaited'
+  | 'Selected'
+  | 'Rejected'
+  | 'Withdrawn'
+  | 'Other/Custom';
+
+export interface AcademicTerm {
+  termNumber: number;
+  sgpa: number;
+  credits: number;
+  verified: boolean;
+  marksheetDocId?: string;
+}
+
+export interface EducationRecord {
+  id: string;
+  institution: string;
+  degree: string;
+  branch: string;
+  startYear: number;
+  expectedGraduationYear: number;
+  currentSemester: number;
+  totalSemesters: number;
+  selfReportedCGPA: number;
+  verifiedCGPA?: number;
+  marksheetExtractedCGPA?: number;
+  discrepancyFlag?: boolean;
+  terms: AcademicTerm[];
+  provenance: DataProvenance;
+  verificationStatus: VerificationStatus;
+}
+
+export interface ExperienceRecord {
+  id: string;
+  company: string;
+  role: string;
+  duration: string;
+  startDate: string;
+  endDate: string;
+  description: string;
+  impactMetrics: string[];
+  skillsUsed: string[];
+  evidenceLevel: EvidenceLevel;
+  provenance: DataProvenance;
+  verificationStatus: VerificationStatus;
+}
+
+export interface ProjectRecord {
+  id: string;
+  title: string;
+  role: string;
+  techStack: string[];
+  description: string;
+  outcomes: string;
+  githubUrl?: string;
+  liveUrl?: string;
+  evidenceLevel: EvidenceLevel;
+  provenance: DataProvenance;
+  verificationStatus: VerificationStatus;
+}
+
+export interface SkillItem {
+  id: string;
+  name: string;
+  category: 'Core CS' | 'Languages & Frameworks' | 'System & Cloud' | 'Databases' | 'Soft Skills';
+  evidenceLevel: EvidenceLevel;
+  supportingEvidence: string[];
+  relevance: EvidenceRelevance;
+  provenance: DataProvenance;
+}
+
+export interface CertificationRecord {
+  id: string;
+  title: string;
+  issuingOrg: string;
+  issueDate: string;
+  credentialUrl?: string;
+  verified: boolean;
+  provenance: DataProvenance;
+}
+
+export interface CareerPreferences {
+  targetRoles: string[];
+  targetLocations: string[];
+  preferredWorkType: 'Hybrid' | 'Remote' | 'On-site' | 'Flexible';
+  minAcceptableCTC: string;
+  targetIndustry: string[];
+}
+
+export interface StudentProfile {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  college: string;
+  headline: string;
+  about: string;
+  careerStage: 'Final Year Student' | 'Pre-final Year' | 'Fresh Graduate' | 'Early-Career Professional';
+  linkedInUrl: string;
+  githubUrl: string;
+  portfolioUrl: string;
+  education: EducationRecord;
+  experiences: ExperienceRecord[];
+  projects: ProjectRecord[];
+  skills: SkillItem[];
+  certifications: CertificationRecord[];
+  preferences: CareerPreferences;
+}
+
+export interface OpportunityJD {
+  id: string;
+  company: string;
+  title: string;
+  function: string;
+  location: string;
+  workArrangement: 'On-site' | 'Hybrid' | 'Remote';
+  experienceRange: string;
+  educationRequirement: string;
+  cgpaCutoff: number;
+  maxBacklogs: number;
+  salaryRange: string;
+  mustHaveSkills: string[];
+  preferredSkills: string[];
+  goodToHaveSkills: string[];
+  keyResponsibilities: string[];
+  ambiguousOrUncertainTerms: string[];
+  rawText?: string;
+}
+
+export interface EligibilityCriterion {
+  criterion: string;
+  required: string;
+  studentValue: string;
+  status: 'PASS' | 'FAIL' | 'UNCERTAIN';
+  notes: string;
+}
+
+export interface RoleFitReport {
+  jdId: string;
+  overallFitScore: number; // 0-100
+  matchTier: 'Strong Match' | 'Conditional Match' | 'Low Match';
+  eligibilityPassed: boolean;
+  criteriaBreakdown: EligibilityCriterion[];
+  matchedSkills: Array<{ skill: string; evidenceLevel: EvidenceLevel; relevance: EvidenceRelevance }>;
+  missingMustHaves: Array<{ skill: string; gapType: GapType }>;
+  missingPreferred: Array<{ skill: string; gapType: GapType }>;
+  positiveContributors: string[];
+  limitingFactors: string[];
+  ambiguityNotes: string[];
+  calculatedAt: string;
+}
+
+export interface CVGapItem {
+  id: string;
+  skillOrCapability: string;
+  gapType: GapType;
+  description: string;
+  evidenceSource?: string;
+  suggestedAction: string;
+}
+
+export interface CVAnalysis {
+  completenessScore: number;
+  quantifiedAchievementsRatio: number;
+  activeVoiceRatio: number;
+  targetJDAlignmentScore: number;
+  gaps: CVGapItem[];
+  bulletImprovements: Array<{ original: string; improved: string; rationale: string }>;
+  suggestedKeywordsToAdd: string[];
+  provenance: DataProvenance;
+  lastAnalyzed: string;
+}
+
+export interface LinkedInAnalysis {
+  completenessScore: number;
+  headlineAudit: { current: string; suggested: string; rationale: string };
+  aboutSummaryAudit: { current: string; suggested: string; rationale: string };
+  visibilityGaps: Array<{ skill: string; reason: string; action: string }>;
+  genuineSkillGaps: Array<{ skill: string; reason: string; action: string }>;
+  sectionChecklist: Array<{ section: string; status: 'Optimized' | 'Needs Attention' | 'Missing'; note: string }>;
+  lastAnalyzed: string;
+}
+
+export interface ApplicationRecord {
+  id: string;
+  company: string;
+  role: string;
+  appliedDate: string;
+  stage: ApplicationStage;
+  stageUpdatedDate: string;
+  healthCategory: 'Healthy' | 'Requires Attention' | 'At Risk' | 'Completed / Closed';
+  healthRationale: string;
+  history: Array<{ stage: ApplicationStage; timestamp: string; comment?: string }>;
+  salaryOffered?: string;
+  location?: string;
+  notes?: string;
+}
+
+export interface PracticeRubricScore {
+  score: number;
+  feedback: string;
+}
+
+export interface PracticeEvaluation {
+  scoreOutOf10: number;
+  overallVerdict: 'Strong' | 'Satisfactory' | 'Needs Development' | 'Incomplete';
+  rubricBreakdown: {
+    correctnessAndTechnicalDepth: PracticeRubricScore;
+    structureAndFrameworkAdherence: PracticeRubricScore;
+    communicationAndClarity: PracticeRubricScore;
+    relevanceToTargetRole: PracticeRubricScore;
+  };
+  highlightedStrengths: string[];
+  pinpointedWeaknesses: string[];
+  idealAnswerStructure: string;
+  followUpQuestion: string;
+}
+
+export interface PracticeSession {
+  id: string;
+  category: 'Aptitude' | 'Technical' | 'Group Discussion (GD)' | 'Case Interview' | 'Personal Interview';
+  mode: 'Practice' | 'Timed Practice' | 'Targeted Weakness Practice';
+  frameworkApplied: string;
+  question: string;
+  studentAnswer: string;
+  evaluation?: PracticeEvaluation;
+  completedAt: string;
+}
+
+export interface ReadinessDimensions {
+  academicReadiness: number; // 0-100
+  profileReadiness: number; // 0-100
+  skillReadiness: number; // 0-100
+  opportunityReadiness: number; // 0-100
+  interviewReadiness: number; // 0-100
+  overallScore: number; // 0-100
+  trend: 'improving' | 'stable' | 'declining';
+  positiveContributors: string[];
+  limitingFactors: string[];
+  lastCalculated: string;
+}
+
+export interface ReadinessSnapshot extends ReadinessDimensions {
+  id: string;
+  triggerEvent: string;
+  timestamp: string;
+}
+
+export interface NextBestAction {
+  id: string;
+  title: string;
+  description: string;
+  impact: 'High Impact' | 'Medium Impact' | 'Foundational';
+  effort: 'Quick Win (<15m)' | 'Moderate (1-2h)' | 'Deep Work (>1d)';
+  urgency: 'Immediate' | 'This Week' | 'Ongoing';
+  pillarTarget: string;
+  rationale: string;
+  isCompleted: boolean;
+}
+
+export interface EventImpactRecord {
+  id: string;
+  timestamp: string;
+  eventType: string;
+  sourcePillar: string;
+  affectedDimensions: string[];
+  explanation: string;
+}
+
+export interface EmailLogEntry {
+  id: string;
+  timestamp: string;
+  recipient: string;
+  recipientRole: string;
+  reportTitle: string;
+  subject: string;
+  status: 'SENT' | 'FAILED' | 'PENDING_APPROVAL' | 'AUDIT_LOGGED' | 'SIMULATED_PREVIEW';
+  authenticatedSender: string;
+}
+
+export * from './auth';
+export * from './state';
+
