@@ -43,9 +43,11 @@ export interface EducationRecord {
   id: string;
   institution: string;
   degree: string;
+  course?: string;
   branch: string;
   startYear: number;
   expectedGraduationYear: number;
+  expectedCompletionDate?: string;
   degreeStatus?: 'pursuing' | 'completed';
   gradingSystem?: 'cgpa' | 'percentage';
   termsCompleted?: number;
@@ -56,6 +58,7 @@ export interface EducationRecord {
   verifiedCGPA?: number;
   marksheetExtractedCGPA?: number;
   discrepancyFlag?: boolean;
+  credentialDocUrl?: string;
   terms: AcademicTerm[];
   provenance: DataProvenance;
   verificationStatus: VerificationStatus;
@@ -76,6 +79,52 @@ export interface ExperienceRecord {
   verificationStatus: VerificationStatus;
 }
 
+export interface SchoolAcademicRecord {
+  board: string;
+  school: string;
+  year: number;
+  score: string;
+  percentage?: number;
+  stream?: string;
+}
+
+export interface PostgraduateRecord {
+  institution: string;
+  degree: string;
+  specialisation?: string;
+  startYear?: number;
+  completionYear?: number;
+  cgpa?: number;
+}
+
+export interface AchievementRecord {
+  id: string;
+  title: string;
+  category: 'Academic' | 'Professional' | 'Competition' | 'Leadership' | 'Extracurricular' | 'Other';
+  description: string;
+  date?: string;
+  impact?: string;
+  verificationStatus: VerificationStatus;
+  provenance: DataProvenance;
+}
+
+export interface PublicationRecord {
+  id: string;
+  title: string;
+  publisherOrConference?: string;
+  year?: number;
+  url?: string;
+  summary?: string;
+  provenance: DataProvenance;
+}
+
+export type CompetencyStatus =
+  | 'Explicit Statement'
+  | 'Practiced in Project/Work'
+  | 'Certified'
+  | 'Evidence insufficient to assess'
+  | 'Required by Role (Gap)';
+
 export interface ProjectRecord {
   id: string;
   title: string;
@@ -83,6 +132,12 @@ export interface ProjectRecord {
   techStack: string[];
   description: string;
   outcomes: string;
+  objective?: string;
+  contribution?: string;
+  methodology?: string;
+  quantifiedImpact?: string;
+  relevanceToTargetRole?: string;
+  missingDetailsNote?: string;
   githubUrl?: string;
   liveUrl?: string;
   evidenceLevel: EvidenceLevel;
@@ -98,6 +153,11 @@ export interface SkillItem {
   supportingEvidence: string[];
   relevance: EvidenceRelevance;
   provenance: DataProvenance;
+  competencyStatus?: CompetencyStatus;
+  demonstratedDepth?: string;
+  relevanceToTargetRole?: string;
+  missingEvidenceNote?: string;
+  recommendedNextAction?: string;
 }
 
 export interface CertificationRecord {
@@ -108,6 +168,9 @@ export interface CertificationRecord {
   credentialUrl?: string;
   verified: boolean;
   provenance: DataProvenance;
+  skillsRepresented?: string[];
+  relevanceToTargetRole?: string;
+  verificationNote?: string;
 }
 
 export interface CareerPreferences {
@@ -124,18 +187,29 @@ export interface StudentProfile {
   email: string;
   phone: string;
   college: string;
+  course?: string;
   headline: string;
   about: string;
   careerStage: 'Final Year Student' | 'Pre-final Year' | 'Fresh Graduate' | 'Early-Career Professional';
   onboardingCompleted?: boolean;
   linkedInUrl: string;
+  linkedInExportText?: string;
+  linkedInExportFileName?: string;
   githubUrl: string;
   portfolioUrl: string;
+  resumeUrl?: string;
+  resumeText?: string;
+  themePreference?: 'dark' | 'light';
+  class10?: SchoolAcademicRecord;
+  class12?: SchoolAcademicRecord;
+  postgraduate?: PostgraduateRecord;
   education: EducationRecord;
   experiences: ExperienceRecord[];
   projects: ProjectRecord[];
   skills: SkillItem[];
   certifications: CertificationRecord[];
+  achievements: AchievementRecord[];
+  publications?: PublicationRecord[];
   preferences: CareerPreferences;
 }
 
@@ -170,6 +244,17 @@ export interface EligibilityCriterion {
 export interface RoleFitReport {
   jdId: string;
   overallFitScore: number; // 0-100
+  atsScore?: number; // 0-100
+  atsBreakdown?: {
+    keywordMatchScore: number;
+    requiredSkillCoverage: number;
+    preferredSkillCoverage: number;
+    educationAlignment: number;
+    experienceRelevance: number;
+    formattingScore: number;
+    missingKeywords: string[];
+    explanation: string;
+  };
   matchTier: 'Strong Match' | 'Conditional Match' | 'Low Match';
   eligibilityPassed: boolean;
   criteriaBreakdown: EligibilityCriterion[];
@@ -179,6 +264,14 @@ export interface RoleFitReport {
   positiveContributors: string[];
   limitingFactors: string[];
   ambiguityNotes: string[];
+  // Seven-Gap Taxonomy (Requirement 9)
+  profileStrengths?: string[];
+  cvPresentationGaps?: string[];
+  genuineCapabilityGaps?: string[];
+  jdAlignmentGaps?: string[];
+  eligibilityGaps?: string[];
+  missingEvidenceItems?: string[];
+  visibilityGaps?: string[];
   calculatedAt: string;
 }
 
@@ -193,9 +286,26 @@ export interface CVGapItem {
 
 export interface CVAnalysis {
   completenessScore: number;
+  grammarQualityScore?: number;
+  structureScore?: number;
+  actionVoiceScore?: number;
   quantifiedAchievementsRatio: number;
   activeVoiceRatio: number;
   targetJDAlignmentScore: number;
+  atsFormattingScore?: number;
+  atsFormattingIssues?: string[];
+  contentCoverage?: {
+    education: boolean;
+    skills: boolean;
+    projects: boolean;
+    experience: boolean;
+    certifications: boolean;
+    achievements: boolean;
+    contactInfo: boolean;
+    links: boolean;
+  };
+  strengths?: string[];
+  presentationGaps?: string[];
   gaps: CVGapItem[];
   bulletImprovements: Array<{ original: string; improved: string; rationale: string }>;
   suggestedKeywordsToAdd: string[];
@@ -324,6 +434,9 @@ export interface NextBestAction {
   pillarTarget: string;
   rationale: string;
   isCompleted: boolean;
+  triggeringFinding?: string;
+  targetModule?: string;
+  expectedOutcome?: string;
 }
 
 export interface EventImpactRecord {

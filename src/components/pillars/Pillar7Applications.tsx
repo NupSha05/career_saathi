@@ -40,13 +40,13 @@ export const Pillar7Applications: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedAppDetail, setSelectedAppDetail] = useState<ApplicationRecord | null>(null);
 
-  // New application form state
+  // New application form state - all fields start empty so user is never forced with a pre-filled company
   const [newCompany, setNewCompany] = useState('');
-  const [newRole, setNewRole] = useState('Software Engineer');
+  const [newRole, setNewRole] = useState('');
   const [newAppType, setNewAppType] = useState<'On-Campus' | 'Off-Campus'>('Off-Campus');
   const [newSource, setNewSource] = useState('Company Careers Portal');
   const [newSourceUrl, setNewSourceUrl] = useState('');
-  const [newLocation, setNewLocation] = useState('Bengaluru / Hybrid');
+  const [newLocation, setNewLocation] = useState('');
   const [newDate, setNewDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [newStage, setNewStage] = useState<ApplicationStage>('Applied');
   const [newNotes, setNewNotes] = useState('');
@@ -115,7 +115,8 @@ export const Pillar7Applications: React.FC = () => {
 
     // Reset
     setNewCompany('');
-    setNewRole('Software Engineer');
+    setNewRole('');
+    setNewLocation('');
     setNewNotes('');
     setNewSourceUrl('');
     setSelectedOpportunityId('');
@@ -145,12 +146,14 @@ export const Pillar7Applications: React.FC = () => {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => {
-                if (activeJD) {
-                  setNewCompany(activeJD.company);
-                  setNewRole(activeJD.title);
-                  setNewLocation(activeJD.location);
-                  setSelectedOpportunityId(activeJD.id);
-                }
+                setNewCompany('');
+                setNewRole('');
+                setNewLocation('');
+                setSelectedOpportunityId('');
+                setNewSourceUrl('');
+                setNewNotes('');
+                setDuplicateWarning(null);
+                setAllowDuplicateBypass(false);
                 setShowAddModal(true);
               }}
               className="bg-indigo-600 hover:bg-indigo-500 text-white px-4 py-2 rounded-xl text-xs font-semibold shadow-md shadow-indigo-600/30 transition cursor-pointer flex items-center gap-1.5"

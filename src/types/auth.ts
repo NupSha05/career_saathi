@@ -25,6 +25,7 @@ export interface AuthCredentials {
   password: string;
   fullName?: string;
   college?: string;
+  course?: string;
   branch?: string;
   role?: 'student' | 'job_seeker';
 }

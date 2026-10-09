@@ -38,18 +38,16 @@ interface NavigationProps {
 export const Navigation: React.FC<NavigationProps> = ({ activeTab, setActiveTab }) => {
   const navItems = [
     { id: 'command-center' as TabType, label: 'Command Center', icon: LayoutDashboard, badge: 'Cockpit' },
-    { id: 'pillar-1-profile' as TabType, label: '1. Student Profile', icon: User, subtitle: 'Evidence Graph' },
-    { id: 'pillar-2-academics' as TabType, label: '2. Academic Intel', icon: GraduationCap, subtitle: 'Deterministic CGPA' },
-    { id: 'pillar-3-career' as TabType, label: '3. Career & Skills', icon: Target, subtitle: 'Level 0-4 Evidence' },
-    { id: 'pillar-4-opportunity' as TabType, label: '4. JD & Role Fit', icon: Briefcase, subtitle: 'Rules + Semantic' },
-    { id: 'pillar-5-cv' as TabType, label: '5. CV Intelligence', icon: FileText, subtitle: '3-Way Gaps' },
-    { id: 'pillar-6-linkedin' as TabType, label: '6. LinkedIn Intel', icon: Linkedin, subtitle: 'Visibility vs Skill' },
-    { id: 'pillar-7-applications' as TabType, label: '7. Applications', icon: Send, subtitle: 'Lifecycle Funnel' },
-    { id: 'pillar-8-practice' as TabType, label: '8. Practice Coach', icon: MessageSquareCode, subtitle: 'STAR Rubrics' },
-    { id: 'pillar-9-readiness' as TabType, label: '9. Readiness Intel', icon: LineChart, subtitle: 'Event Impact' },
+    { id: 'pillar-1-profile' as TabType, label: '1. Profile & Academics', icon: User, subtitle: 'Credentials & Evidence' },
+    { id: 'pillar-3-career' as TabType, label: '2. Career & Skills', icon: Target, subtitle: 'Evidence Levels 0-4' },
+    { id: 'pillar-4-opportunity' as TabType, label: '3. JD & Role Fit', icon: Briefcase, subtitle: 'Rules + Semantic' },
+    { id: 'pillar-5-cv' as TabType, label: '4. CV Intelligence', icon: FileText, subtitle: '3-Way Gaps' },
+    { id: 'pillar-6-linkedin' as TabType, label: '5. LinkedIn Intel', icon: Linkedin, subtitle: 'Recruiter Visibility' },
+    { id: 'pillar-7-applications' as TabType, label: '6. Applications', icon: Send, subtitle: 'Lifecycle Funnel' },
+    { id: 'pillar-8-practice' as TabType, label: '7. Practice Coach', icon: MessageSquareCode, subtitle: 'STAR Rubrics' },
+    { id: 'pillar-9-readiness' as TabType, label: '8. Readiness Intel', icon: LineChart, subtitle: 'Event Impact' },
     { id: 'action-center' as TabType, label: 'Action Center', icon: CheckSquare, badge: 'Prioritized' },
     { id: 'report-center' as TabType, label: 'Profile Analysis & Export', icon: FileDown, subtitle: 'Mail & Audit' },
-    { id: 'rag-knowledge-base' as TabType, label: 'RAG Knowledge Base', icon: BookOpen, badge: 'System B' },
   ];
 
   return (

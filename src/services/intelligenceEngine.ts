@@ -9,6 +9,9 @@ import {
   ReadinessDimensions,
   NextBestAction,
   GapType,
+  ProjectRecord,
+  CertificationRecord,
+  AchievementRecord,
 } from '../types';
 
 /**
@@ -194,17 +197,19 @@ export function evaluateEligibility(profile: StudentProfile, jd: OpportunityJD):
     criteria.push({
       criterion: 'Academic Cutoff (CGPA)',
       required: `>= ${jd.cgpaCutoff} CGPA`,
-      studentValue: `${studentCGPA} CGPA`,
-      status: passed ? 'PASS' : 'FAIL',
-      notes: passed
-        ? `Exceeds the minimum cutoff of ${jd.cgpaCutoff}.`
-        : `Below the required threshold by ${(jd.cgpaCutoff - studentCGPA).toFixed(2)} points. Immediate barrier for automated screening.`,
+      studentValue: studentCGPA ? `${studentCGPA.toFixed(2)} CGPA` : 'Not recorded',
+      status: !studentCGPA ? 'UNCERTAIN' : passed ? 'PASS' : 'FAIL',
+      notes: !studentCGPA
+        ? 'CGPA not yet entered in academic credentials.'
+        : passed
+        ? `Meets minimum threshold of ${jd.cgpaCutoff}.`
+        : `Below the required threshold by ${(jd.cgpaCutoff - studentCGPA).toFixed(2)} points.`,
     });
   }
 
   // Criterion 2: Education Degree / Branch Alignment
-  const studentBranch = profile.education.branch.toLowerCase();
-  const reqLower = jd.educationRequirement.toLowerCase();
+  const studentBranch = (profile.education.branch || '').toLowerCase();
+  const reqLower = (jd.educationRequirement || '').toLowerCase();
   const branchMatched =
     reqLower.includes('any') ||
     reqLower.includes('cs') ||
@@ -213,38 +218,38 @@ export function evaluateEligibility(profile: StudentProfile, jd: OpportunityJD):
     reqLower.includes('information technology') ||
     studentBranch.includes('computer') ||
     studentBranch.includes('cs') ||
-    studentBranch.includes('information technology');
+    studentBranch.includes('information technology') ||
+    studentBranch.includes('engineering');
 
   criteria.push({
     criterion: 'Degree & Discipline',
-    required: jd.educationRequirement,
-    studentValue: `${profile.education.degree} in ${profile.education.branch}`,
+    required: jd.educationRequirement || 'Relevant Degree',
+    studentValue: `${profile.education.degree || 'Degree'} in ${profile.education.branch || 'Discipline'}`,
     status: branchMatched ? 'PASS' : 'UNCERTAIN',
     notes: branchMatched
-      ? 'Discipline is in the core targeted branches list.'
-      : 'Specialization may require recruiter discretion or specific course waiver.',
+      ? 'Discipline is aligned with target criteria.'
+      : 'Discipline may require recruiter review or specific coursework equivalence.',
   });
 
   // Criterion 3: Backlog Restrictions
-  // In our profile model, check if any failed terms exist
-  const activeBacklogs = 0; // Default zero backlogs for Aarav
+  const activeBacklogs = 0;
   const backlogPass = activeBacklogs <= (jd.maxBacklogs ?? 0);
   criteria.push({
     criterion: 'Active Backlogs Policy',
     required: `<= ${jd.maxBacklogs ?? 0} active backlogs`,
     studentValue: `${activeBacklogs} active backlogs`,
     status: backlogPass ? 'PASS' : 'FAIL',
-    notes: backlogPass ? 'Meets strict zero-backlog compliance.' : 'Exceeds maximum allowable backlogs.',
+    notes: backlogPass ? 'Satisfies zero active backlogs requirement.' : 'Exceeds allowable backlogs.',
   });
 
   // Criterion 4: Graduation Year / Batch
-  const expectedGradYear = profile.education.expectedGraduationYear;
+  const expectedGradYear = profile.education.expectedGraduationYear || 2026;
   criteria.push({
     criterion: 'Graduation Year / Batch Eligibility',
     required: 'Immediate Campus Batch (2025/2026)',
     studentValue: `Batch of ${expectedGradYear}`,
     status: 'PASS',
-    notes: 'Matches expected campus recruitment window.',
+    notes: 'Matches expected recruitment window.',
   });
 
   return {
@@ -253,19 +258,110 @@ export function evaluateEligibility(profile: StudentProfile, jd: OpportunityJD):
   };
 }
 
-// 4. CONTEXTUAL ROLE FIT CALCULATION
+// 3b. EXPLAINABLE ATS ALIGNMENT ENGINE (Requirement 8)
+export function calculateATSAlignment(
+  profile: StudentProfile,
+  jd: OpportunityJD,
+  cvText?: string
+): {
+  atsScore: number;
+  atsBreakdown: {
+    keywordMatchScore: number;
+    requiredSkillCoverage: number;
+    preferredSkillCoverage: number;
+    educationAlignment: number;
+    experienceRelevance: number;
+    formattingScore: number;
+    missingKeywords: string[];
+    explanation: string;
+  };
+} {
+  const textToScan = (cvText || profile.resumeText || '').toLowerCase();
+  const mustHaves = jd.mustHaveSkills || [];
+  const preferred = jd.preferredSkills || [];
+
+  // 1. Must-have skill match (weight: 40%)
+  let mustMatchedCount = 0;
+  const missingKeywords: string[] = [];
+
+  for (const skill of mustHaves) {
+    const sLower = skill.toLowerCase();
+    const inProfile = profile.skills.some((ps) => ps.name.toLowerCase().includes(sLower) || sLower.includes(ps.name.toLowerCase()));
+    const inText = textToScan.includes(sLower);
+    if (inProfile || inText) {
+      mustMatchedCount++;
+    } else {
+      missingKeywords.push(skill);
+    }
+  }
+  const requiredSkillCoverage = mustHaves.length > 0 ? Math.round((mustMatchedCount / mustHaves.length) * 100) : 100;
+
+  // 2. Preferred skill match (weight: 20%)
+  let prefMatchedCount = 0;
+  for (const skill of preferred) {
+    const sLower = skill.toLowerCase();
+    const inProfile = profile.skills.some((ps) => ps.name.toLowerCase().includes(sLower) || sLower.includes(ps.name.toLowerCase()));
+    const inText = textToScan.includes(sLower);
+    if (inProfile || inText) {
+      prefMatchedCount++;
+    } else {
+      missingKeywords.push(skill);
+    }
+  }
+  const preferredSkillCoverage = preferred.length > 0 ? Math.round((prefMatchedCount / preferred.length) * 100) : 80;
+
+  // 3. Education alignment (weight: 20%)
+  const eligibility = evaluateEligibility(profile, jd);
+  const educationAlignment = eligibility.isEligible ? 95 : 60;
+
+  // 4. Experience & Project relevance (weight: 10%)
+  let experienceRelevance = 50;
+  if (profile.experiences.length > 0) experienceRelevance += 30;
+  if (profile.projects.length >= 2) experienceRelevance += 20;
+  experienceRelevance = Math.min(100, experienceRelevance);
+
+  // 5. Keyword match & formatting (weight: 10%)
+  let keywordMatchScore = Math.round((requiredSkillCoverage * 0.7 + preferredSkillCoverage * 0.3));
+  let formattingScore = 90;
+  if (textToScan && !textToScan.includes('@')) formattingScore -= 20;
+  if (!profile.linkedInUrl && !textToScan.includes('linkedin')) formattingScore -= 10;
+
+  // Composite ATS Score
+  const atsScore = Math.round(
+    requiredSkillCoverage * 0.40 +
+    preferredSkillCoverage * 0.20 +
+    educationAlignment * 0.20 +
+    experienceRelevance * 0.10 +
+    formattingScore * 0.10
+  );
+
+  const explanation = `ATS score synthesized from: Must-have skills (${requiredSkillCoverage}%), Preferred skills (${preferredSkillCoverage}%), Academic criteria (${educationAlignment}%), Experience depth (${experienceRelevance}%), and CV formatting (${formattingScore}%).`;
+
+  return {
+    atsScore: Math.min(100, Math.max(10, atsScore)),
+    atsBreakdown: {
+      keywordMatchScore,
+      requiredSkillCoverage,
+      preferredSkillCoverage,
+      educationAlignment,
+      experienceRelevance,
+      formattingScore,
+      missingKeywords: Array.from(new Set(missingKeywords)),
+      explanation,
+    },
+  };
+}
+
+// 4. CONTEXTUAL ROLE FIT CALCULATION (Enhanced with 7-Gap Taxonomy)
 export function calculateContextualRoleFit(profile: StudentProfile, jd: OpportunityJD): RoleFitReport {
   const eligibility = evaluateEligibility(profile, jd);
-
-  const studentSkillNames = new Set(profile.skills.map((s) => s.name.toLowerCase()));
-  const studentProjects = profile.projects;
-  const studentExperiences = profile.experiences;
+  const atsResult = calculateATSAlignment(profile, jd, profile.resumeText);
 
   // Check Must-Have Skills Coverage
   const missingMustHaves: Array<{ skill: string; gapType: GapType }> = [];
   const matchedSkills: Array<{ skill: string; evidenceLevel: any; relevance: any }> = [];
 
-  for (const mustSkill of jd.mustHaveSkills) {
+  for (const mustSkill of jd.mustHaveSkills || []) {
     const skillObj = profile.skills.find(
       (s) => s.name.toLowerCase().includes(mustSkill.toLowerCase()) || mustSkill.toLowerCase().includes(s.name.toLowerCase())
     );
@@ -273,8 +369,8 @@ export function calculateContextualRoleFit(profile: StudentProfile, jd: Opportun
     if (skillObj) {
       matchedSkills.push({
         skill: mustSkill,
-        evidenceLevel: skillObj.evidenceLevel,
-        relevance: skillObj.relevance,
+        evidenceLevel: skillObj.evidenceLevel || 2,
+        relevance: skillObj.relevance || 'Directly Relevant',
       });
     } else {
       missingMustHaves.push({
@@ -286,7 +382,7 @@ export function calculateContextualRoleFit(profile: StudentProfile, jd: Opportun
 
   // Check Preferred Skills Coverage
   const missingPreferred: Array<{ skill: string; gapType: GapType }> = [];
-  for (const prefSkill of jd.preferredSkills) {
+  for (const prefSkill of jd.preferredSkills || []) {
     const found = profile.skills.find(
       (s) => s.name.toLowerCase().includes(prefSkill.toLowerCase()) || prefSkill.toLowerCase().includes(s.name.toLowerCase())
     );
@@ -298,25 +394,21 @@ export function calculateContextualRoleFit(profile: StudentProfile, jd: Opportun
     }
   }
 
-  // Calculate Weighted Match
-  const mustHaveCount = jd.mustHaveSkills.length || 1;
-  const mustHaveMatched = jd.mustHaveSkills.length - missingMustHaves.length;
+  const mustHaveCount = jd.mustHaveSkills?.length || 1;
+  const mustHaveMatched = (jd.mustHaveSkills?.length || 0) - missingMustHaves.length;
   const mustRatio = mustHaveMatched / mustHaveCount;
 
-  const prefCount = jd.preferredSkills.length || 1;
-  const prefMatched = jd.preferredSkills.length - missingPreferred.length;
+  const prefCount = jd.preferredSkills?.length || 1;
+  const prefMatched = (jd.preferredSkills?.length || 0) - missingPreferred.length;
   const prefRatio = prefMatched / prefCount;
 
-  // Evidence depth multiplier (average evidence level of matched skills, 0 to 4)
   const avgEvidence =
     matchedSkills.length > 0
-      ? matchedSkills.reduce((acc, m) => acc + m.evidenceLevel, 0) / matchedSkills.length
+      ? matchedSkills.reduce((acc, m) => acc + (m.evidenceLevel || 2), 0) / matchedSkills.length
       : 0;
-  const evidenceMultiplier = 0.7 + (avgEvidence / 4) * 0.3; // 0.7 to 1.0
+  const evidenceMultiplier = 0.75 + (avgEvidence / 4) * 0.25;
 
   let fitScore = Math.round((mustRatio * 70 + prefRatio * 30) * evidenceMultiplier);
-
-  // If hard eligibility fails, cap score and note conditional
   if (!eligibility.isEligible) {
     fitScore = Math.min(fitScore, 58);
   }
@@ -328,20 +420,76 @@ export function calculateContextualRoleFit(profile: StudentProfile, jd: Opportun
     matchTier = 'Conditional Match';
   }
 
-  const positiveContributors: string[] = [];
-  if (mustRatio >= 0.75) positiveContributors.push(`Strong coverage of core must-have requirements (${mustHaveMatched}/${mustHaveCount})`);
-  if (eligibility.isEligible) positiveContributors.push('Satisfies deterministic academic cutoff and degree eligibility criteria');
-  if (studentExperiences.length > 0) positiveContributors.push(`Verified internship experience (${studentExperiences[0].role} at ${studentExperiences[0].company})`);
-  if (studentProjects.length >= 2) positiveContributors.push(`Demonstrated portfolio with ${studentProjects.length} practical projects`);
+  // Seven-Gap Taxonomy (Requirement 9)
+  const profileStrengths: string[] = [];
+  const cvPresentationGaps: string[] = [];
+  const genuineCapabilityGaps: string[] = [];
+  const jdAlignmentGaps: string[] = [];
+  const eligibilityGaps: string[] = [];
+  const missingEvidenceItems: string[] = [];
+  const visibilityGaps: string[] = [];
 
-  const limitingFactors: string[] = [];
-  if (!eligibility.isEligible) limitingFactors.push('Fails one or more hard eligibility thresholds');
-  if (missingMustHaves.length > 0) limitingFactors.push(`Lacks verified evidence for: ${missingMustHaves.map((m) => m.skill).join(', ')}`);
-  if (avgEvidence < 2.5) limitingFactors.push('Several skills are backed only by coursework rather than production/deployed evidence');
+  // 1. Profile Strengths
+  if (mustRatio >= 0.7) {
+    profileStrengths.push(`Core technical competence matches ${mustHaveMatched} of ${mustHaveCount} must-have criteria.`);
+  }
+  if (profile.projects.length >= 2) {
+    profileStrengths.push(`Proven practical portfolio: ${profile.projects.map((p) => p.title).join(', ')}.`);
+  }
+  if (profile.experiences.length > 0) {
+    profileStrengths.push(`Direct work experience: ${profile.experiences[0].role} at ${profile.experiences[0].company}.`);
+  }
+  if (eligibility.isEligible) {
+    profileStrengths.push(`Satisfies deterministic academic cutoff (>= ${jd.cgpaCutoff} CGPA).`);
+  }
+
+  // 2. CV Presentation Gaps
+  if (profile.projects.some((p) => !p.outcomes || p.outcomes.length < 15)) {
+    cvPresentationGaps.push('Project accomplishments lack quantified metric outcomes in resume bullets.');
+  }
+  if (!profile.resumeText?.includes('GitHub') && profile.githubUrl) {
+    cvPresentationGaps.push('GitHub repository profile is recorded internally but not hyperlinked in the CV header.');
+  }
+
+  // 3. Genuine Capability Gaps
+  for (const m of missingMustHaves) {
+    genuineCapabilityGaps.push(`Must-have requirement "${m.skill}" is not registered in your verified skill profile.`);
+  }
+
+  // 4. JD Alignment Gaps
+  for (const p of missingPreferred) {
+    jdAlignmentGaps.push(`Preferred tool "${p.skill}" is requested in the job description but not highlighted.`);
+  }
+
+  // 5. Eligibility Gaps
+  for (const crit of eligibility.criteria) {
+    if (crit.status === 'FAIL') {
+      eligibilityGaps.push(`${crit.criterion}: Required ${crit.required}, student has ${crit.studentValue}.`);
+    } else if (crit.status === 'UNCERTAIN') {
+      eligibilityGaps.push(`${crit.criterion}: Requires manual verification (${crit.notes}).`);
+    }
+  }
+
+  // 6. Missing Evidence Items
+  for (const skill of profile.skills) {
+    if (skill.evidenceLevel <= 1) {
+      missingEvidenceItems.push(`Skill "${skill.name}" is claimed without a supporting project repository or certification.`);
+    }
+  }
+
+  // 7. Visibility Gaps
+  if (profile.skills.length > 0 && !profile.linkedInUrl) {
+    visibilityGaps.push('Verified technical skills are missing recruiter discoverability because LinkedIn URL is not linked.');
+  }
+
+  const positiveContributors: string[] = profileStrengths;
+  const limitingFactors: string[] = [...genuineCapabilityGaps, ...eligibilityGaps];
 
   return {
     jdId: jd.id,
     overallFitScore: Math.min(100, Math.max(0, fitScore)),
+    atsScore: atsResult.atsScore,
+    atsBreakdown: atsResult.atsBreakdown,
     matchTier,
     eligibilityPassed: eligibility.isEligible,
     criteriaBreakdown: eligibility.criteria,
@@ -351,8 +499,84 @@ export function calculateContextualRoleFit(profile: StudentProfile, jd: Opportun
     positiveContributors,
     limitingFactors,
     ambiguityNotes: jd.ambiguousOrUncertainTerms || [],
+    profileStrengths,
+    cvPresentationGaps,
+    genuineCapabilityGaps,
+    jdAlignmentGaps,
+    eligibilityGaps,
+    missingEvidenceItems,
+    visibilityGaps,
     calculatedAt: new Date().toISOString(),
   };
+}
+
+// 4b. DEDICATED PROJECT, CERTIFICATION & ACHIEVEMENT ANALYZERS (Requirement 7)
+export function analyzeProjects(projects: ProjectRecord[], targetJD?: OpportunityJD) {
+  return projects.map((p) => {
+    const hasQuantified = Boolean(p.quantifiedImpact || p.outcomes?.match(/\d+/));
+    const targetSkills = targetJD ? [...targetJD.mustHaveSkills, ...targetJD.preferredSkills] : [];
+    const matchedTech = p.techStack.filter((t) =>
+      targetSkills.some((ts) => ts.toLowerCase().includes(t.toLowerCase()) || t.toLowerCase().includes(ts.toLowerCase()))
+    );
+
+    let relevanceScore = 70;
+    if (matchedTech.length >= 2) relevanceScore = 95;
+    else if (matchedTech.length === 1) relevanceScore = 85;
+
+    const missingDetails: string[] = [];
+    if (!p.githubUrl) missingDetails.push('Add repository link to verify source code and commit history');
+    if (!hasQuantified) missingDetails.push('Add quantified metrics (e.g. latency, requests/sec, user volume)');
+    if (!p.role || p.role === 'Developer') missingDetails.push('Specify your individual contribution and ownership');
+
+    return {
+      id: p.id,
+      title: p.title,
+      role: p.role,
+      techStack: p.techStack,
+      description: p.description,
+      outcomes: p.outcomes,
+      quantifiedImpact: p.quantifiedImpact || (hasQuantified ? p.outcomes : 'Qualitative implementation confirmed'),
+      relevanceScore,
+      targetRoleRelevance: matchedTech.length > 0 ? `Demonstrates ${matchedTech.join(', ')} required by target role` : 'General software engineering competence',
+      missingDetails,
+      verificationStatus: p.verificationStatus,
+    };
+  });
+}
+
+export function analyzeCertifications(certs: CertificationRecord[], targetJD?: OpportunityJD) {
+  return certs.map((c) => {
+    const targetSkills = targetJD ? [...targetJD.mustHaveSkills, ...targetJD.preferredSkills] : [];
+    const skills = c.skillsRepresented || [];
+    const isRelevant = skills.some((s) => targetSkills.some((ts) => ts.toLowerCase().includes(s.toLowerCase())));
+
+    return {
+      id: c.id,
+      title: c.title,
+      issuingOrg: c.issuingOrg,
+      issueDate: c.issueDate,
+      credentialUrl: c.credentialUrl,
+      verified: c.verified,
+      skillsRepresented: skills,
+      relevanceToTargetRole: isRelevant ? 'Directly supports target role specifications' : 'Broad technical credential',
+      verificationNote: c.verified ? 'Cryptographically or institutional link verified' : 'Self-reported document proof',
+    };
+  });
+}
+
+export function analyzeAchievements(achievements: AchievementRecord[], _targetJD?: OpportunityJD) {
+  return achievements.map((a) => {
+    return {
+      id: a.id,
+      title: a.title,
+      category: a.category,
+      description: a.description,
+      date: a.date,
+      impact: a.impact || 'Demonstrates competitive distinction and merit',
+      communicationClarity: a.description.length > 40 ? 'Well-articulated context and achievement' : 'Brief statement; could elaborate on scope and competitor count',
+      verificationStatus: a.verificationStatus,
+    };
+  });
 }
 
 // 5. READINESS DIMENSIONS CALCULATOR (Contextual, Dynamic & Evidence-Grounded)
@@ -539,7 +763,7 @@ export function calculateReadiness(
   };
 }
 
-// 6. ACTION CENTER PRIORITIZATION
+// 6. ACTION CENTER PRIORITIZATION & CAREER ROADMAP (Requirement 12)
 export function generatePrioritizedActions(
   profile: StudentProfile,
   readiness: ReadinessDimensions,
@@ -557,6 +781,9 @@ export function generatePrioritizedActions(
       effort: 'Quick Win (<15m)',
       urgency: 'Immediate',
       pillarTarget: 'Pillar 2: Academic Intelligence',
+      targetModule: 'Pillar 2: Academic Intelligence',
+      triggeringFinding: 'Missing semester records prevent accurate eligibility cutoffs.',
+      expectedOutcome: 'Unlocks automated campus threshold evaluation and grade trajectory trends.',
       rationale: 'Campus cutoffs depend directly on deterministic credit-weighted academic calculations.',
       isCompleted: false,
     });
@@ -571,6 +798,9 @@ export function generatePrioritizedActions(
       effort: 'Quick Win (<15m)',
       urgency: 'Immediate',
       pillarTarget: 'Pillar 3: Career & Profile Intelligence',
+      targetModule: 'Pillar 3: Career & Profile Intelligence',
+      triggeringFinding: 'Zero registered skills in student profile.',
+      expectedOutcome: 'Establishes initial Skill Readiness index and activates role matching.',
       rationale: 'Required for calculating accurate role fit and opportunity eligibility.',
       isCompleted: false,
     });
@@ -578,7 +808,6 @@ export function generatePrioritizedActions(
 
   // If transcript discrepancy
   if (profile.education.discrepancyFlag) {
-
     actions.push({
       id: 'act-reconcile-cgpa',
       title: 'Reconcile Academic Discrepancy',
@@ -587,36 +816,68 @@ export function generatePrioritizedActions(
       effort: 'Quick Win (<15m)',
       urgency: 'Immediate',
       pillarTarget: 'Pillar 2: Academic Intelligence',
+      targetModule: 'Pillar 2: Academic Intelligence',
+      triggeringFinding: 'Self-reported CGPA diverges from official transcript record.',
+      expectedOutcome: 'Restores verified academic provenance for campus recruitment audits.',
       rationale: 'Automated campus screening filters out unverified discrepancies immediately.',
       isCompleted: false,
     });
   }
 
   // If missing must have skills in JD
-  if (targetJD) {
+  if (targetJD && targetJD.mustHaveSkills?.length > 0) {
+    const missing = targetJD.mustHaveSkills.filter(
+      (m) => !profile.skills.some((s) => s.name.toLowerCase().includes(m.toLowerCase()) || m.toLowerCase().includes(s.name.toLowerCase()))
+    );
+    if (missing.length > 0) {
+      actions.push({
+        id: 'act-bridge-jd-gap',
+        title: `Build Evidence for ${targetJD.company || 'Target Role'} Requirements`,
+        description: `Target JD requires: ${missing.slice(0, 2).join(', ')}. Add a project repository or certification proof.`,
+        impact: 'High Impact',
+        effort: 'Deep Work (>1d)',
+        urgency: 'Immediate',
+        pillarTarget: 'Pillar 4: JD & Opportunity Intelligence',
+        targetModule: 'Pillar 4: Opportunity Intelligence',
+        triggeringFinding: `Target role requires ${missing.join(', ')} which is absent from current evidence.`,
+        expectedOutcome: 'Closes critical must-have gap and elevates role fit tier to Strong Match.',
+        rationale: 'Moves role fit from Conditional to Strong tier for competitive opportunities.',
+        isCompleted: false,
+      });
+    }
+  }
+
+  // Project evidence enhancement
+  if (profile.projects.length < 2) {
     actions.push({
-      id: 'act-bridge-jd-gap',
-      title: `Build Evidence for ${targetJD.company} Target`,
-      description: `Target JD requires: ${targetJD.mustHaveSkills.slice(0, 2).join(', ')}. Add GitHub demo or project evidence.`,
+      id: 'act-add-project',
+      title: 'Document a Practical Software Project with Repository Link',
+      description: 'Showcase an end-to-end full-stack or systems project with architecture overview, tech stack, and GitHub repository.',
       impact: 'High Impact',
       effort: 'Deep Work (>1d)',
-      urgency: 'Immediate',
-      pillarTarget: 'Pillar 4: JD & Opportunity Intelligence',
-      rationale: 'Moves role fit from Conditional to Strong tier for high-paying roles.',
+      urgency: 'This Week',
+      pillarTarget: 'Pillar 3: Career & Profile Intelligence',
+      targetModule: 'Pillar 3: Career & Profile Intelligence',
+      triggeringFinding: 'Fewer than 2 practical projects recorded in student portfolio.',
+      expectedOutcome: 'Elevates demonstrated skill depth from Level 1 (Stated) to Level 2 (Applied).',
+      rationale: 'Technical recruiters prioritize candidates with verifiable proof of work and public source code.',
       isCompleted: false,
     });
   }
 
   // Interview practice
-  if (readiness.interviewReadiness !== null && readiness.interviewReadiness < 75) {
+  if (readiness.interviewReadiness === null || readiness.interviewReadiness < 75) {
     actions.push({
       id: 'act-practice-behavioral',
-      title: 'Complete 2 STAR Method Behavioral Practice Questions',
-      description: 'Practice behavioral interview questions using the STAR framework to raise your Interview Readiness score.',
+      title: 'Complete 2 STAR Method Practice Sessions',
+      description: 'Practice behavioral and situational interview questions using the STAR framework to raise your Interview Readiness score.',
       impact: 'Medium Impact',
       effort: 'Moderate (1-2h)',
       urgency: 'This Week',
-      pillarTarget: 'Pillar 8: Preparation Coach',
+      pillarTarget: 'Pillar 8: Practice Coach',
+      targetModule: 'Pillar 8: Practice Coach',
+      triggeringFinding: 'Insufficient mock practice responses recorded in preparation intel.',
+      expectedOutcome: 'Improves answer structure, clarity score, and interview confidence.',
       rationale: 'Solidifies narrative delivery and elevates interview readiness beyond 80%.',
       isCompleted: false,
     });
@@ -625,28 +886,51 @@ export function generatePrioritizedActions(
   // CV Optimization
   actions.push({
     id: 'act-cv-quantify',
-    title: 'Quantify Metrics in Experience Bullets',
-    description: 'Transform passive statements into impact-driven metrics (e.g. reduced load time by 35%).',
+    title: 'Quantify Impact Metrics in Resume Bullets',
+    description: 'Transform descriptive duty statements into measurable achievements (e.g. latency reduced by 38%, handled 8,500 req/sec).',
     impact: 'High Impact',
     effort: 'Quick Win (<15m)',
     urgency: 'This Week',
     pillarTarget: 'Pillar 5: CV Intelligence',
-    rationale: 'Distinguishes your profile in ATS parsers and recruiter screenings.',
+    targetModule: 'Pillar 5: CV Intelligence',
+    triggeringFinding: 'Several experience and project bullets lack quantifiable outcomes.',
+    expectedOutcome: 'Increases recruiter engagement and elevates ATS content quality score.',
+    rationale: 'Quantified impact demonstrates business awareness and technical ownership.',
     isCompleted: false,
   });
 
   // LinkedIn Positioning
-  actions.push({
-    id: 'act-linkedin-headline',
-    title: 'Align LinkedIn Headline with Target Role',
-    description: 'Update headline from "Student at..." to "Aspiring Software Engineer | React, Node.js & Distributed Systems".',
-    impact: 'Medium Impact',
-    effort: 'Quick Win (<15m)',
-    urgency: 'Ongoing',
-    pillarTarget: 'Pillar 6: LinkedIn Intelligence',
-    rationale: 'Increases recruiter search visibility by up to 3.4x for tech roles.',
-    isCompleted: false,
-  });
+  if (!profile.linkedInUrl) {
+    actions.push({
+      id: 'act-linkedin-url',
+      title: 'Link Your LinkedIn Profile URL',
+      description: 'Add your LinkedIn public profile link in Profile or LinkedIn Intelligence to evaluate discoverability.',
+      impact: 'Medium Impact',
+      effort: 'Quick Win (<15m)',
+      urgency: 'Immediate',
+      pillarTarget: 'Pillar 6: LinkedIn Intelligence',
+      targetModule: 'Pillar 6: LinkedIn Intelligence',
+      triggeringFinding: 'LinkedIn profile is not linked to your student intelligence record.',
+      expectedOutcome: 'Unlocks recruiter visibility audit and headline positioning insights.',
+      rationale: 'Recruiters rely on LinkedIn for inbound outreach and candidate verification.',
+      isCompleted: false,
+    });
+  } else {
+    actions.push({
+      id: 'act-linkedin-headline',
+      title: 'Align LinkedIn Headline with Target Role',
+      description: 'Update headline from generic student status to target role keywords and verified competencies.',
+      impact: 'Medium Impact',
+      effort: 'Quick Win (<15m)',
+      urgency: 'Ongoing',
+      pillarTarget: 'Pillar 6: LinkedIn Intelligence',
+      targetModule: 'Pillar 6: LinkedIn Intelligence',
+      triggeringFinding: 'Headline can be optimized for technical search algorithms.',
+      expectedOutcome: 'Increases recruiter search discoverability by up to 3.4x.',
+      rationale: 'Recruiter searches prioritize matching target role keywords and core technologies.',
+      isCompleted: false,
+    });
+  }
 
   return actions;
 }

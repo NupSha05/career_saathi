@@ -416,8 +416,11 @@ export const CareerSaathiProvider: React.FC<{ children: React.ReactNode }> = ({ 
       initialProfile.name = user.name;
       initialProfile.email = user.email || '';
       initialProfile.college = creds.college || '';
+      initialProfile.course = creds.course || '';
       initialProfile.education.institution = creds.college || '';
-      initialProfile.education.branch = creds.branch || 'Computer Science & Engineering';
+      initialProfile.education.degree = creds.course || '';
+      initialProfile.education.course = creds.course || '';
+      initialProfile.education.branch = creds.branch || '';
       initialProfile.onboardingCompleted = true;
 
       setProfile(initialProfile);

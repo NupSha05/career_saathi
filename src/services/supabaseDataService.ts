@@ -372,6 +372,7 @@ export async function fetchFullStudentProfile(userId: string): Promise<StudentPr
         verified: Boolean(c.verified),
         provenance: (c.provenance as any) || 'user_provided',
       })),
+      achievements: [],
       preferences: {
         targetRoles: prefsRow?.target_roles || ['Full Stack Engineer', 'Backend Specialist'],
         targetLocations: prefsRow?.preferred_locations || ['Bengaluru', 'Hyderabad'],

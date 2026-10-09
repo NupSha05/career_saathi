@@ -191,6 +191,55 @@ app.post('/api/ai/evaluate-practice', async (req: Request, res: Response) => {
 });
 
 // 4. CV Analysis (Cross-Validation: Profile ↔ CV ↔ Target JD)
+app.post('/api/document/extract-text', async (req: Request, res: Response) => {
+  try {
+    const { fileBase64, fileName, mimeType } = req.body;
+    if (!fileBase64) {
+      return res.status(400).json({ error: 'File data is required' });
+    }
+
+    const buffer = Buffer.from(fileBase64, 'base64');
+    let extractedText = '';
+
+    // If text or markdown file, decode UTF-8 directly
+    if (
+      mimeType?.includes('text') ||
+      mimeType?.includes('markdown') ||
+      fileName?.endsWith('.txt') ||
+      fileName?.endsWith('.md')
+    ) {
+      extractedText = buffer.toString('utf-8');
+      return res.json({ success: true, text: extractedText, fileName });
+    }
+
+    // If PDF or Doc and AI service is available, attempt multimodal document reading
+    if (mimeType?.includes('pdf') || fileName?.endsWith('.pdf')) {
+      const aiText = await AIService.extractDocumentText({ fileBase64, fileName, mimeType });
+      if (aiText) {
+        return res.json({ success: true, text: aiText, fileName });
+      }
+    }
+
+    // Robust text scraper fallback for binary documents (strips nulls/control chars)
+    const rawStr = buffer.toString('utf-8');
+    const cleaned = rawStr
+      .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, ' ')
+      .replace(/\s{2,}/g, ' ')
+      .trim();
+
+    if (cleaned.length > 50) {
+      extractedText = cleaned;
+    } else {
+      extractedText = `[Uploaded Document: ${fileName || 'document'}]\n(Parsed file size: ${(buffer.length / 1024).toFixed(1)} KB)`;
+    }
+
+    return res.json({ success: true, text: extractedText, fileName });
+  } catch (err: any) {
+    console.error('Error extracting document text:', err);
+    return res.status(500).json({ error: 'Failed to extract document text', message: err.message });
+  }
+});
+
 app.post('/api/ai/analyze-cv', async (req: Request, res: Response) => {
   try {
     const { profile, cvText, activeJD } = req.body;
@@ -201,6 +250,20 @@ app.post('/api/ai/analyze-cv', async (req: Request, res: Response) => {
   } catch (err: any) {
     console.error('Error in CV analysis:', err);
     return res.status(500).json({ error: 'Failed to analyze CV', message: err.message });
+  }
+});
+
+// 4b. Extract CV Entities & Quality Analysis
+app.post('/api/ai/extract-cv', async (req: Request, res: Response) => {
+  try {
+    const { cvText } = req.body;
+    if (!cvText) return res.status(400).json({ error: 'CV text is required' });
+
+    const extracted = await AIService.extractCVEntities(cvText);
+    return res.json({ success: true, extracted });
+  } catch (err: any) {
+    console.error('Error in CV entity extraction:', err);
+    return res.status(500).json({ error: 'Failed to extract CV entities', message: err.message });
   }
 });
 
@@ -216,49 +279,28 @@ app.post('/api/ai/analyze-linkedin', async (req: Request, res: Response) => {
   }
 });
 
-// 6. Direct Email Report Delivery Simulation & Activity Logging (FR-056, FR-057)
-const emailActivityLog: Array<{
-  id: string;
-  timestamp: string;
-  recipient: string;
-  recipientRole?: string;
-  reportTitle: string;
-  subject: string;
-  status: 'SENT' | 'FAILED' | 'PENDING_APPROVAL' | 'AUDIT_LOGGED';
-  authenticatedSender: string;
-}> = [];
-
-app.post('/api/email/send-report', async (req: Request, res: Response) => {
+app.post('/api/ai/parse-linkedin-export', async (req: Request, res: Response) => {
   try {
-    const { recipient, reportTitle, subject, customMessage, studentName, authenticatedSender } = req.body;
-    if (!recipient || !recipient.trim()) {
-      return res.status(400).json({ error: 'Recipient email is required' });
-    }
-
-    const logEntry = {
-      id: `email-${Date.now()}`,
-      timestamp: new Date().toISOString(),
-      recipient: recipient.trim(),
-      reportTitle: reportTitle || 'Whole Profile Analysis & Recommendations',
-      subject: subject || `Whole Profile Analysis & Recommendations: ${studentName || 'Candidate'} [Career Saathi]`,
-      status: 'SENT' as const,
-      authenticatedSender: authenticatedSender || 'student@careersaathi.app',
-    };
-
-    emailActivityLog.unshift(logEntry);
-
-    return res.json({
-      success: true,
-      message: `Profile analysis and recommendations report transmitted directly to ${recipient.trim()} and recorded in audit register.`,
-      log: logEntry,
-    });
+    const { exportText } = req.body;
+    if (!exportText) return res.status(400).json({ error: 'Export text is required' });
+    const parsed = await AIService.parseLinkedInExport(exportText);
+    return res.json({ success: true, parsed });
   } catch (err: any) {
-    return res.status(500).json({ error: 'Email delivery failed', message: err.message });
+    console.error('Error in parsing LinkedIn export:', err);
+    return res.status(500).json({ error: 'Failed to parse LinkedIn export', message: err.message });
   }
 });
 
+// 6. Direct Email Report Delivery Endpoint Retired (Prompt Requirement 14)
+app.post('/api/email/send-report', (_req: Request, res: Response) => {
+  return res.status(410).json({
+    success: false,
+    error: 'Email report transmission has been retired. Please use Download Complete Report for offline PDF and audit export.',
+  });
+});
+
 app.get('/api/email/logs', (_req: Request, res: Response) => {
-  return res.json({ logs: emailActivityLog });
+  return res.json({ logs: [] });
 });
 
 // 7. RAG Knowledge Base Endpoints (Directly linked to /RAG_KNOWLEDGE_BASE)

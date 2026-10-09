@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { CareerSaathiProvider, useCareerSaathi } from './context/CareerSaathiContext';
+import { ThemeProvider } from './context/ThemeContext';
 import { Header } from './components/Header';
 import { Navigation, TabType } from './components/Navigation';
 import { CommandCenter } from './components/pillars/CommandCenter';
@@ -28,9 +29,8 @@ function WorkspaceLayout() {
       case 'command-center':
         return <CommandCenter setActiveTab={setActiveTab} onOpenAskSaathi={() => setIsAskSaathiOpen(true)} />;
       case 'pillar-1-profile':
-        return <Pillar1Profile />;
       case 'pillar-2-academics':
-        return <Pillar2Academics />;
+        return <Pillar1Profile />;
       case 'pillar-3-career':
         return <Pillar3CareerIntelligence />;
       case 'pillar-4-opportunity':
@@ -79,7 +79,17 @@ function WorkspaceLayout() {
       <footer className="border-t border-slate-900 bg-slate-950/80 py-4 text-center text-[11px] text-slate-500 print:hidden">
         <div className="max-w-7xl mx-auto px-4 flex flex-col sm:flex-row justify-between items-center gap-2">
           <span>Career Saathi AI • Persistent Personal Career Intelligence Platform</span>
-          <span>9 Functional Pillars • Supabase PostgreSQL • Deterministic Reasoning</span>
+          <div className="flex items-center gap-3">
+            <span>Deterministic Reasoning Engine</span>
+            <span>•</span>
+            <button
+              onClick={() => setActiveTab('rag-knowledge-base')}
+              className="text-slate-500 hover:text-indigo-400 transition underline cursor-pointer"
+              title="Internal Policy & Framework Documents (Auditors / Admin)"
+            >
+              Internal Knowledge Base & Architecture
+            </button>
+          </div>
         </div>
       </footer>
     </div>
@@ -131,8 +141,10 @@ function RootApp() {
 
 export default function App() {
   return (
-    <CareerSaathiProvider>
-      <RootApp />
-    </CareerSaathiProvider>
+    <ThemeProvider>
+      <CareerSaathiProvider>
+        <RootApp />
+      </CareerSaathiProvider>
+    </ThemeProvider>
   );
 }

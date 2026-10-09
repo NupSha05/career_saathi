@@ -53,8 +53,51 @@ export const ReportCenterView: React.FC = () => {
   const [sendSuccessMessage, setSendSuccessMessage] = useState<string | null>(null);
   const [sendErrorMessage, setSendErrorMessage] = useState<string | null>(null);
 
+  const handleDownloadDossier = () => {
+    const reportElem = document.getElementById('report-printable-dossier');
+    const content = reportElem ? reportElem.innerHTML : '';
+    const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>${selectedReportType} — ${profile.name || 'Candidate'}</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .no-print { display: none !important; }
+    }
+  </style>
+</head>
+<body class="bg-slate-50 text-slate-900 p-8 font-sans">
+  <div class="max-w-4xl mx-auto bg-white p-8 rounded-2xl shadow-xl border border-slate-200">
+    <div class="no-print bg-indigo-50 border border-indigo-200 rounded-xl p-4 mb-6 flex justify-between items-center text-xs text-indigo-900">
+      <span>📄 <strong>Print-Ready Offline Dossier:</strong> Press <strong>Ctrl+P</strong> (or <strong>Cmd+P</strong> on Mac) to Save as PDF.</span>
+      <button onclick="window.print()" class="px-3 py-1.5 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700">Print / Save as PDF</button>
+    </div>
+    ${content}
+  </div>
+</body>
+</html>`;
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `CareerSaathi_${(profile.name || 'Candidate').replace(/\\s+/g, '_')}_Profile_Analysis.html`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+
   const handlePrint = () => {
-    window.print();
+    try {
+      window.print();
+    } catch {
+      handleDownloadDossier();
+    }
   };
 
   const handleSendEmail = async (e: React.FormEvent) => {
@@ -150,8 +193,17 @@ export const ReportCenterView: React.FC = () => {
 
           <div className="flex items-center gap-2">
             <button
+              onClick={handleDownloadDossier}
+              className="bg-indigo-600 hover:bg-indigo-500 text-white px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-2 shadow shadow-indigo-600/30"
+              title="Download standalone HTML and print-ready dossier"
+            >
+              <FileDown className="w-4 h-4" />
+              <span>Download Report</span>
+            </button>
+            <button
               onClick={handlePrint}
               className="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3.5 py-2 rounded-xl text-xs font-semibold transition cursor-pointer flex items-center gap-2 shadow"
+              title="Open browser print / Save as PDF dialog"
             >
               <Printer className="w-4 h-4 text-indigo-400" />
               <span>Print / Save as PDF</span>
@@ -189,7 +241,7 @@ export const ReportCenterView: React.FC = () => {
       {/* Main Grid: Live Printable Report Preview & Export Dispatch Panel */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Left 2 Cols: Comprehensive Whole Profile Analysis Report (A4 styled, highly detailed) */}
-        <div className="lg:col-span-2 bg-white text-slate-900 rounded-2xl p-8 shadow-2xl border border-slate-200 font-sans print:m-0 print:p-0 print:border-none print:shadow-none space-y-6">
+        <div id="report-printable-dossier" className="lg:col-span-2 bg-white text-slate-900 rounded-2xl p-8 shadow-2xl border border-slate-200 font-sans print:m-0 print:p-0 print:border-none print:shadow-none space-y-6">
           {/* Document Header */}
           <div className="border-b-2 border-slate-900 pb-5 flex flex-col sm:flex-row justify-between items-start gap-4">
             <div>

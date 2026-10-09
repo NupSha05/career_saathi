@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { useCareerSaathi } from '../context/CareerSaathiContext';
+import { useTheme } from '../context/ThemeContext';
 import { AuthModal } from './auth/AuthModal';
 import {
   Sparkles,
@@ -11,6 +12,8 @@ import {
   LogIn,
   LogOut,
   UserCheck,
+  Sun,
+  Moon,
 } from 'lucide-react';
 
 interface HeaderProps {
@@ -29,6 +32,8 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAskSaathi }) => {
     isSupabaseConnected,
     signOut,
   } = useCareerSaathi();
+
+  const { theme, toggleTheme } = useTheme();
 
   const [showScoreInfo, setShowScoreInfo] = useState(false);
   const [showModeConfirm, setShowModeConfirm] = useState(false);
@@ -183,6 +188,26 @@ export const Header: React.FC<HeaderProps> = ({ onOpenAskSaathi }) => {
                   </div>
                 )}
               </div>
+
+              {/* Color Theme Switcher (Light / Dark) */}
+              <button
+                onClick={toggleTheme}
+                className="flex items-center space-x-1.5 bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 px-2.5 py-1.5 rounded-lg text-xs font-medium transition cursor-pointer"
+                title={theme === 'dark' ? 'Switch to Light Theme' : 'Switch to Dark Theme'}
+                aria-label="Toggle Color Theme"
+              >
+                {theme === 'dark' ? (
+                  <>
+                    <Sun className="w-3.5 h-3.5 text-amber-400" />
+                    <span className="hidden md:inline">Light</span>
+                  </>
+                ) : (
+                  <>
+                    <Moon className="w-3.5 h-3.5 text-indigo-400" />
+                    <span className="hidden md:inline">Dark</span>
+                  </>
+                )}
+              </button>
 
               {/* Ask Career Saathi Floating Trigger */}
               <button
